@@ -118,65 +118,97 @@ export function ResultsView({ round, players }) {
                 </motion.div>
             )}
 
-            {/* Non-cooperative: Show individual player cards */}
+            {/* Non-cooperative: Show individual player cards in a compact grid */}
             {!isCooperativeRound && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem' }}>
-                    {sortedPlayers.map((player) => (
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                    gap: '1rem'
+                }}>
+                    {sortedPlayers.map((player, index) => (
                         <motion.div
                             key={player.id}
                             className="card"
                             style={{
-                                width: 'auto',
-                                padding: '1.5rem',
+                                padding: '0',
+                                overflow: 'hidden',
                                 border: player.is_alive ? '2px solid var(--success)' : '2px solid var(--danger)',
-                                opacity: player.is_alive ? 1 : 0.8
                             }}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: player.is_alive ? 1 : 0.8, y: 0 }}
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: index * 0.05 }}
                         >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                                <h3 style={{ color: player.is_alive ? 'var(--success)' : 'var(--danger)', fontSize: '1.3rem' }}>{player.name}</h3>
-                                {player.is_alive ? <Heart color="var(--success)" size={24} /> : <Skull color="var(--danger)" size={24} />}
-                            </div>
-
-                            <div style={{ marginBottom: '1rem', fontStyle: 'italic', color: '#ccc', fontSize: '1rem', lineHeight: '1.4' }}>
-                                "{player.strategy || "No strategy..."}"
-                            </div>
-
-                            {!player.is_alive && (
-                                <div style={{ color: 'var(--danger)', fontWeight: 'bold', fontSize: '1rem', marginBottom: '0.75rem' }}>
-                                    TERMINATED: {player.death_reason || "Data corrupted"}
-                                </div>
-                            )}
-
-                            {player.is_alive && player.survival_reason && (
-                                <div style={{ color: 'var(--success)', fontWeight: 'bold', fontSize: '1rem', marginBottom: '0.75rem' }}>
-                                    DATA INTACT: {player.survival_reason}
-                                </div>
-                            )}
-
-                            <div style={{
-                                color: player.is_alive ? 'var(--success)' : 'var(--danger)',
-                                fontWeight: 'bold',
-                                fontSize: '1.4rem',
-                                marginTop: '1rem',
-                                padding: '0.5rem',
-                                background: player.is_alive ? 'rgba(0, 255, 0, 0.1)' : 'rgba(255, 0, 0, 0.1)',
-                                borderRadius: '4px',
-                                textAlign: 'center'
-                            }}>
-                                {player.is_alive ? '+100 PTS' : '+0 PTS'}
-                            </div>
-
+                            {/* Image first - prominent */}
                             {player.result_image_url ? (
-                                <div style={{ marginTop: '1rem', borderRadius: '8px', overflow: 'hidden' }}>
-                                    <img src={player.result_image_url} alt="Result" style={{ width: '100%', height: 'auto', display: 'block' }} />
+                                <div style={{ position: 'relative' }}>
+                                    <img
+                                        src={player.result_image_url}
+                                        alt="Result"
+                                        style={{ width: '100%', height: '200px', objectFit: 'cover', display: 'block' }}
+                                    />
+                                    {/* Overlay with status */}
+                                    <div style={{
+                                        position: 'absolute',
+                                        top: '0.5rem',
+                                        right: '0.5rem',
+                                        background: player.is_alive ? 'var(--success)' : 'var(--danger)',
+                                        borderRadius: '50%',
+                                        padding: '0.4rem',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                    }}>
+                                        {player.is_alive ? <Heart color="#000" size={16} /> : <Skull color="#000" size={16} />}
+                                    </div>
                                 </div>
                             ) : (
-                                <div className="card" style={{ marginTop: '1rem', height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed #444' }}>
-                                    <span className="spinner"></span> Generating Evidence...
+                                <div style={{
+                                    height: '200px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    background: '#1a1a1a'
+                                }}>
+                                    <span className="spinner"></span>
                                 </div>
                             )}
+
+                            {/* Compact info section */}
+                            <div style={{ padding: '1rem' }}>
+                                {/* Name and points row */}
+                                <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    marginBottom: '0.5rem'
+                                }}>
+                                    <span style={{
+                                        fontWeight: 'bold',
+                                        fontSize: '1.1rem',
+                                        color: player.is_alive ? 'var(--success)' : 'var(--danger)'
+                                    }}>
+                                        {player.name}
+                                    </span>
+                                    <span style={{
+                                        color: player.is_alive ? 'var(--success)' : 'var(--danger)',
+                                        fontWeight: 'bold',
+                                        fontSize: '1rem'
+                                    }}>
+                                        {player.is_alive ? '+100' : '+0'}
+                                    </span>
+                                </div>
+
+                                {/* Reason - compact */}
+                                <div style={{
+                                    fontSize: '0.85rem',
+                                    color: '#aaa',
+                                    lineHeight: '1.3'
+                                }}>
+                                    {player.is_alive
+                                        ? (player.survival_reason || 'Survived!')
+                                        : (player.death_reason || 'Did not survive')}
+                                </div>
+                            </div>
                         </motion.div>
                     ))}
                 </div>
