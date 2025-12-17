@@ -1,27 +1,30 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 
 export function CoopVotingView({ round, playerId, onVote, players }) {
-    const [selectedId, setSelectedId] = useState(null);
+    const existingVote = round.coop_votes?.[playerId] || null;
+    const [selectedId, setSelectedId] = useState(existingVote);
     const [loading, setLoading] = useState(false);
+    const [hasVoted, setHasVoted] = useState(!!existingVote);
+
+    // Sync with server state if vote changes externally
+    useEffect(() => {
+        if (existingVote && !hasVoted) {
+            setSelectedId(existingVote);
+            setHasVoted(true);
+        }
+    }, [existingVote, hasVoted]);
 
     const handleVote = async () => {
         if (!selectedId || selectedId === playerId) return;
         setLoading(true);
         await onVote(selectedId);
+        setHasVoted(true);
         setLoading(false);
     };
 
-    // Check if already voted
-    if (round.coop_votes && round.coop_votes[playerId]) {
-        return (
-            <div className="card" style={{ textAlign: 'center' }}>
-                <h2>VOTE CAST</h2>
-                <p>Waiting for others to vote...</p>
-                <span className="loader"></span>
-            </div>
-        );
-    }
+    const hasChangedVote = hasVoted && selectedId !== existingVote;
+    const canSubmit = selectedId && selectedId !== playerId && (!hasVoted || hasChangedVote);
 
     // Check if images are still generating
     const entries = Object.entries(round.strategy_images || {});
@@ -82,24 +85,44 @@ export function CoopVotingView({ round, playerId, onVote, players }) {
                                     YOUR STRATEGY
                                 </div>
                             )}
+                            {existingVote === pid && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: 5,
+                                    left: 5,
+                                    background: 'var(--success)',
+                                    padding: '4px 8px',
+                                    borderRadius: '4px',
+                                    fontSize: '10px',
+                                    color: 'black',
+                                    fontWeight: 'bold'
+                                }}>
+                                    YOUR VOTE
+                                </div>
+                            )}
                         </motion.div>
                     );
                 })}
             </div>
 
             <div style={{ textAlign: 'center', marginTop: '2rem' }}>
+                {hasVoted && !hasChangedVote && (
+                    <p style={{ color: 'var(--success)', marginBottom: '1rem' }}>
+                        Vote submitted! Select a different image to change your vote.
+                    </p>
+                )}
                 <button
                     className="primary"
                     onClick={handleVote}
-                    disabled={!selectedId || selectedId === playerId || loading}
+                    disabled={!canSubmit || loading}
                     style={{
-                        backgroundColor: 'var(--accent)',
+                        backgroundColor: hasChangedVote ? 'var(--secondary)' : 'var(--accent)',
                         color: 'black',
                         padding: '16px 32px',
                         fontSize: '1.2rem'
                     }}
                 >
-                    {loading ? 'VOTING...' : 'CONFIRM VOTE'}
+                    {loading ? 'VOTING...' : hasChangedVote ? 'CHANGE VOTE' : 'CONFIRM VOTE'}
                 </button>
             </div>
         </div>
