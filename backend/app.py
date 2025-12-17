@@ -101,32 +101,32 @@ def generate_scenario_llm(round_num: int, max_rounds: int = 5):
         corruption = "severe fragmentation"
         narrative_hint = "Deep in corrupted data, reality is unreliable."
 
-    prompt = f"""You are a malfunctioning AI simulation generating deadly survival scenarios.
+    prompt = f"""Generate a deadly survival scenario for a party game. Level {round_num} of {max_rounds}.
 
-This is LEVEL {round_num} of {max_rounds} - {phase} with {corruption}.
-Context: {narrative_hint}
+Create a SHORT scenario (2-3 sentences) with:
+1. A CLEAR THREAT the player must deal with (monster, trap, disaster, enemy, etc.)
+2. A SPECIFIC SETTING (jungle temple, space station, haunted mansion, medieval dungeon, etc.)
+3. ONE subtle "wrongness" that hints something is off (wrong colors, impossible geometry, repeating patterns)
 
-Generate a short, deadly survival scenario (2-3 sentences max).
-The scenario can be ANY setting (jungle, space station, medieval castle, underwater lab,
-haunted house, alien planet, etc.) because the simulation is pulling from fragmented data archives.
+The scenario must give players something ACTIONABLE to respond to - they should be able to:
+- Fight or flee from something
+- Solve a puzzle or disarm a trap
+- Talk/negotiate their way out
+- Use an object or tool creatively
+- Make a clever observation or joke
 
-IMPORTANT: Include a subtle glitch or "wrongness" - something that hints this world isn't quite real:
-- Colors that shouldn't exist (the sky is the wrong shade, shadows fall incorrectly)
-- Impossible geometry (stairs that loop, rooms larger inside than outside)
-- Repeating patterns (the same bird flies by every 3 seconds)
-- Sensory anomalies (you can taste colors, sounds have texture)
-- Deja vu moments (you've done this exact thing before)
+GOOD examples (clear threats, actionable):
+- "You're in a flooding submarine. Water pours through a crack in the hull. The emergency hatch is jammed, and something large just bumped the hull from outside."
+- "A masked killer blocks the cabin door, machete raised. The window behind you is small but breakable. The killer tilts their head the same way every 3 seconds, like a broken animatronic."
+- "You wake up strapped to a table in a mad scientist's lab. A laser is slowly moving toward you. The scientist is monologuing but keeps repeating the same sentence."
 
-Do NOT use meta-language like "simulation", "program", "glitch" or "corrupted" in the scenario
-itself - describe it as if the player is experiencing it directly and naturally.
+BAD examples (too vague, no clear action):
+- "You're in a forest and shadows are purple and you're holding random objects" (no clear threat)
+- "Reality feels wrong and things keep shifting" (nothing to do)
 
-Write in second person present tense ("You are standing...", "You find yourself...")
+Write in second person ("You are...", "You find yourself...")
 
-Example: "You're in a hospital corridor that stretches infinitely in both directions. The fluorescent
-lights flicker in a pattern that feels almost like breathing. Something wet is dragging itself
-toward you from both ends."
-
-Generate ONLY the scenario text, nothing else:"""
+Generate ONLY the scenario, nothing else:"""
 
     try:
         print(f"SCENARIO GEN: Calling LLM for round {round_num}...", flush=True)
@@ -196,25 +196,24 @@ async def judge_strategy_llm_async(scenario: str, strategy: str):
     import re
     import httpx
 
-    prompt = f"""You are a malfunctioning AI simulation evaluating survival strategies.
+    prompt = f"""Judge if this survival strategy works. Be harsh but fair.
 
-ENVIRONMENT LOADED: {scenario}
+SCENARIO: {scenario}
 
-USER SURVIVAL PROTOCOL: {strategy}
+STRATEGY: {strategy}
 
-Evaluate if this strategy allows the user to maintain data integrity (survive this level).
-Be harsh but fair - clever and creative strategies should work, lazy or generic ones should fail.
+Rules:
+- Clever, creative, or funny strategies SURVIVE
+- Generic, lazy, or nonsensical strategies DIE
+- Must actually address the threat
 
-If they FAIL (survived=false): Describe their "termination" - how the environment deleted them.
-Use subtle digital/glitch undertones in death descriptions (fragmented, dissolved, corrupted, erased, etc.)
+IMPORTANT - Keep "reason" SHORT (1-2 sentences, under 30 words). Focus on what happened, not glitchy/meta stuff. Can be darkly funny.
 
-If they SURVIVE (survived=true): Describe how they escaped or overcame the threat.
+Good reasons: "The shark wasn't impressed by diplomacy." / "Your torch scared them off long enough to escape."
+Bad reasons: "Your data fragmented across corrupted memory sectors as the simulation..." (too long/meta)
 
-For the visual_prompt: Describe the scene dramatically for image generation. Include the outcome
-(death scene or survival scene) with vivid details matching the scenario's aesthetic.
-
-You must respond with ONLY a JSON object, no markdown or extra text.
-Format: {{"survived": true/false, "reason": "short explanation with subtle simulation flavor", "visual_prompt": "vivid scene description for image generation"}}"""
+JSON only, no markdown:
+{{"survived": true/false, "reason": "1-2 sentences max", "visual_prompt": "scene for image"}}"""
     try:
         print(f"LLM Judge: Calling API for strategy: {strategy[:50]}...", flush=True)
         async with httpx.AsyncClient(timeout=60.0) as client:
@@ -314,25 +313,24 @@ def judge_strategy_llm(scenario: str, strategy: str):
     """Sync version of judgement with simulation flavor."""
     import re
     client = get_llm_client()
-    prompt = f"""You are a malfunctioning AI simulation evaluating survival strategies.
+    prompt = f"""Judge if this survival strategy works. Be harsh but fair.
 
-ENVIRONMENT LOADED: {scenario}
+SCENARIO: {scenario}
 
-USER SURVIVAL PROTOCOL: {strategy}
+STRATEGY: {strategy}
 
-Evaluate if this strategy allows the user to maintain data integrity (survive this level).
-Be harsh but fair - clever and creative strategies should work, lazy or generic ones should fail.
+Rules:
+- Clever, creative, or funny strategies SURVIVE
+- Generic, lazy, or nonsensical strategies DIE
+- Must actually address the threat
 
-If they FAIL (survived=false): Describe their "termination" - how the environment deleted them.
-Use subtle digital/glitch undertones in death descriptions (fragmented, dissolved, corrupted, erased, etc.)
+IMPORTANT - Keep "reason" SHORT (1-2 sentences, under 30 words). Focus on what happened, not glitchy/meta stuff. Can be darkly funny.
 
-If they SURVIVE (survived=true): Describe how they escaped or overcame the threat.
+Good reasons: "The shark wasn't impressed by diplomacy." / "Your torch scared them off long enough to escape."
+Bad reasons: "Your data fragmented across corrupted memory sectors as the simulation..." (too long/meta)
 
-For the visual_prompt: Describe the scene dramatically for image generation. Include the outcome
-(death scene or survival scene) with vivid details matching the scenario's aesthetic.
-
-You must respond with ONLY a JSON object, no markdown or extra text.
-Format: {{"survived": true/false, "reason": "short explanation with subtle simulation flavor", "visual_prompt": "vivid scene description for image generation"}}"""
+JSON only, no markdown:
+{{"survived": true/false, "reason": "1-2 sentences max", "visual_prompt": "scene for image"}}"""
     try:
         print(f"LLM Judge: Calling API for strategy: {strategy[:50]}...", flush=True)
         completion = client.chat.completions.create(
