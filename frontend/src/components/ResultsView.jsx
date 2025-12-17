@@ -138,13 +138,13 @@ export function ResultsView({ round, players }) {
                             animate={{ opacity: 1, scale: 1 }}
                             transition={{ delay: index * 0.05 }}
                         >
-                            {/* Image first - prominent */}
+                            {/* Image first - prominent, full aspect ratio */}
                             {player.result_image_url ? (
                                 <div style={{ position: 'relative' }}>
                                     <img
                                         src={player.result_image_url}
                                         alt="Result"
-                                        style={{ width: '100%', height: '200px', objectFit: 'cover', display: 'block' }}
+                                        style={{ width: '100%', height: 'auto', display: 'block' }}
                                     />
                                     {/* Overlay with status */}
                                     <div style={{
@@ -163,7 +163,7 @@ export function ResultsView({ round, players }) {
                                 </div>
                             ) : (
                                 <div style={{
-                                    height: '200px',
+                                    aspectRatio: '16/9',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',

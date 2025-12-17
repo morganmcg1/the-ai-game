@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 
-export function InputView({ round, playerId, onSubmit }) {
+export function InputView({ round, playerId, onSubmit, flatTop = false }) {
     const [strategy, setStrategy] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -28,7 +28,7 @@ export function InputView({ round, playerId, onSubmit }) {
     };
 
     return (
-        <div className="card input-card">
+        <div className="card input-card" style={flatTop ? { borderTopLeftRadius: 0, borderTopRightRadius: 0, marginTop: 0 } : {}}>
             <h3 style={{ fontFamily: 'monospace', color: 'var(--secondary)' }}>SURVIVAL PROTOCOL</h3>
             <p className="hint-text" style={{ fontFamily: 'monospace' }}>&gt; Input your survival strategy. Be creative to maintain data integrity...</p>
             <div className="input-wrapper">

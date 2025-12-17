@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { AlertTriangle, Terminal } from 'lucide-react';
 
-export function ScenarioView({ round, isSpectating, maxRounds }) {
+export function ScenarioView({ round, isSpectating, maxRounds, flatBottom = false }) {
     if (!round) return null;
 
     // Calculate "corruption" percentage based on round progression
@@ -11,6 +11,7 @@ export function ScenarioView({ round, isSpectating, maxRounds }) {
     return (
         <motion.div
             className="card"
+            style={flatBottom ? { borderBottomLeftRadius: 0, borderBottomRightRadius: 0, marginBottom: 0 } : {}}
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
         >

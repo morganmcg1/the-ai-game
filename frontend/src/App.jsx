@@ -603,8 +603,8 @@ function App() {
       return (
         <>
           {header}
-          <ScenarioView round={currentRound} isSpectating={false} />
-          <InputView round={currentRound} playerId={playerId} onSubmit={submitStrategy} />
+          <ScenarioView round={currentRound} isSpectating={false} flatBottom={true} />
+          <InputView round={currentRound} playerId={playerId} onSubmit={submitStrategy} flatTop={true} />
         </>
       );
     }
