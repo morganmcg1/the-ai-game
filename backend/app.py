@@ -282,11 +282,15 @@ async def generate_character_image_async(character_prompt: str, style_theme: str
     if not style_theme:
         style_theme = random.choice(IMAGE_STYLE_THEMES)
 
-    # Enhance prompt for character portrait with game style theme
-    base_prompt = f"Character portrait, upper body shot: {character_prompt}. Ready for survival adventure."
+    # Build a rich prompt that shows the character in an action scene with all their traits
+    base_prompt = f"""Dynamic character portrait in an action pose. {character_prompt}.
+The character should be shown in a dramatic survival scenario moment, displaying their personality and equipment.
+Full scene with background, cinematic lighting, highly detailed, game character art."""
+
     full_prompt = apply_style_theme(base_prompt, style_theme)
 
     print(f"CHARACTER IMG: Generating with style: {style_theme[:40]}...", flush=True)
+    print(f"CHARACTER IMG: Full prompt: {full_prompt[:100]}...", flush=True)
 
     url = "https://fal.run/fal-ai/flux/krea"
     headers = {

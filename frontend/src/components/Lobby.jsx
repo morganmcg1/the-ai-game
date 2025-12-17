@@ -3,37 +3,32 @@ import { motion } from 'framer-motion';
 import { RefreshCw } from 'lucide-react';
 import { api } from '../api';
 
-// 5 fun character description fields
+// 5 character description fields
 const CHARACTER_FIELDS = [
     {
         id: 'look',
         label: 'PHYSICAL VIBE',
-        placeholder: 'e.g., "wild purple hair, leather jacket, mysterious scar"',
-        icon: '👤'
+        placeholder: 'e.g., "wild purple hair, leather jacket, mysterious scar"'
     },
     {
         id: 'weapon',
         label: 'SIGNATURE WEAPON',
-        placeholder: 'e.g., "rusty machete", "flaming guitar", "pocket sand"',
-        icon: '⚔️'
+        placeholder: 'e.g., "rusty machete", "flaming guitar", "pocket sand"'
     },
     {
         id: 'talent',
         label: 'HIDDEN TALENT',
-        placeholder: 'e.g., "can talk to animals", "expert lockpicker", "never sleeps"',
-        icon: '✨'
+        placeholder: 'e.g., "can talk to animals", "expert lockpicker", "never sleeps"'
     },
     {
         id: 'flaw',
         label: 'FATAL FLAW',
-        placeholder: 'e.g., "trusts everyone", "allergic to running", "speaks too loud"',
-        icon: '💀'
+        placeholder: 'e.g., "trusts everyone", "allergic to running", "speaks too loud"'
     },
     {
         id: 'catchphrase',
         label: 'CATCHPHRASE',
-        placeholder: 'e.g., "I\'ve seen worse", "Hold my beer", "Not again..."',
-        icon: '💬'
+        placeholder: 'e.g., "I\'ve seen worse", "Hold my beer", "Not again..."'
     }
 ];
 
@@ -338,14 +333,8 @@ export function Lobby({ onJoin, onAdmin, setPlayerId }) {
                                 className="input-group"
                                 style={{ marginBottom: '1rem' }}
                             >
-                                <label style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '0.5rem',
-                                    marginBottom: '0.4rem'
-                                }}>
-                                    <span>{field.icon}</span>
-                                    <span>{field.label}</span>
+                                <label style={{ marginBottom: '0.4rem', display: 'block' }}>
+                                    {field.label}
                                 </label>
                                 <input
                                     type="text"
