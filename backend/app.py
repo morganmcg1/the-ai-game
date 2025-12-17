@@ -144,51 +144,79 @@ Generate ONLY the scenario, nothing else:"""
         return "ERROR: SCENARIO DATA CORRUPTED. You are suspended in static. Something moves in the noise."
 
 
-def generate_sector_name_llm(scenario: str, style_theme: str) -> str:
-    """Generate a creative 2-3 word sector name based on the scenario and visual style."""
-    client = get_llm_client()
+async def generate_scenario_llm_async(round_num: int, max_rounds: int = 5):
+    """Async version of generate_scenario_llm for parallel pre-warming."""
+    import httpx
 
-    # Extract just the main style descriptor (before the first comma)
-    style_short = style_theme.split(',')[0].strip() if style_theme else "unknown"
+    # Narrative phase based on progression
+    if round_num == 1:
+        phase = "initialization sequence"
+        corruption = "minor data artifacts"
+        narrative_hint = "The simulation is just booting up, things seem almost normal but slightly off."
+    elif round_num == 2:
+        phase = "calibration protocol"
+        corruption = "increasing instability"
+        narrative_hint = "The system is trying to calibrate but errors are creeping in."
+    elif round_num == max_rounds:
+        phase = "exit protocol - final level"
+        corruption = "critical system failure, reality breaking down"
+        narrative_hint = "This is the final test before escape. Everything is falling apart."
+    else:
+        phase = "corrupted memory sector"
+        corruption = "severe fragmentation"
+        narrative_hint = "Deep in corrupted data, reality is unreliable."
 
-    prompt = f"""You are naming sectors in a corrupted simulation game. Generate a SHORT, CREATIVE sector name (2-3 words max) that combines the visual style with the scenario setting.
+    prompt = f"""Generate a deadly survival scenario for a party game. Level {round_num} of {max_rounds}.
 
-Visual Style: {style_short}
-Scenario: {scenario[:200]}
+Create a SHORT scenario (2-3 sentences) with:
+1. A CLEAR THREAT the player must deal with (monster, trap, disaster, enemy, etc.)
+2. A SPECIFIC SETTING (jungle temple, space station, haunted mansion, medieval dungeon, etc.)
+3. ONE subtle "wrongness" that hints something is off (wrong colors, impossible geometry, repeating patterns)
 
-Rules:
-- DO NOT include words like "style", "aesthetic", "sector", "zone", "level"
-- DO NOT just repeat the style name
-- Create something evocative that hints at both the look AND the danger
-- Use dramatic, game-like naming (e.g., "NEON ABYSS", "PIXEL GRAVEYARD", "CHROME NIGHTMARE")
+The scenario must give players something ACTIONABLE to respond to - they should be able to:
+- Fight or flee from something
+- Solve a puzzle or disarm a trap
+- Talk/negotiate their way out
+- Use an object or tool creatively
+- Make a clever observation or joke
 
-Examples:
-- Style "anime" + jungle scenario → "SAKURA RUINS"
-- Style "pixel art" + hospital scenario → "8-BIT HOSPITAL"
-- Style "noir" + underwater scenario → "SHADOW DEPTHS"
-- Style "vaporwave" + desert scenario → "CHROME MIRAGE"
+GOOD examples (clear threats, actionable):
+- "You're in a flooding submarine. Water pours through a crack in the hull. The emergency hatch is jammed, and something large just bumped the hull from outside."
+- "A masked killer blocks the cabin door, machete raised. The window behind you is small but breakable. The killer tilts their head the same way every 3 seconds, like a broken animatronic."
+- "You wake up strapped to a table in a mad scientist's lab. A laser is slowly moving toward you. The scientist is monologuing but keeps repeating the same sentence."
 
-Output ONLY the sector name in caps, nothing else:"""
+BAD examples (too vague, no clear action):
+- "You're in a forest and shadows are purple and you're holding random objects" (no clear threat)
+- "Reality feels wrong and things keep shifting" (nothing to do)
+
+Write in second person ("You are...", "You find yourself...")
+
+Generate ONLY the scenario, nothing else:"""
 
     try:
-        completion = client.chat.completions.create(
-            model="moonshotai/kimi-k2-0905",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=20,
-        )
-        result = completion.choices[0].message.content.strip().upper()
-        # Clean up any quotes or extra punctuation
-        result = result.strip('"\'').strip()
-        # Ensure it's not too long
-        if len(result) > 30:
-            result = result[:30]
-        print(f"SECTOR NAME: Generated '{result}'", flush=True)
+        print(f"SCENARIO GEN ASYNC: Calling LLM for round {round_num}...", flush=True)
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {os.environ['MOONSHOT_API_KEY']}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "moonshotai/kimi-k2-0905",
+                    "messages": [{"role": "user", "content": prompt}]
+                }
+            )
+            response.raise_for_status()
+            data = response.json()
+            result = data["choices"][0]["message"]["content"].strip()
+        print(f"SCENARIO GEN ASYNC: Success round {round_num} - {result[:50]}...", flush=True)
         return result
     except Exception as e:
-        print(f"SECTOR NAME Error: {e}", flush=True)
-        # Fallback: use cleaned style theme
-        fallback = style_short.upper().replace(" STYLE", "").replace(" AESTHETIC", "")
-        return f"{fallback} SECTOR"
+        import traceback
+        print(f"SCENARIO GEN ASYNC Error round {round_num}: {type(e).__name__}: {e}", flush=True)
+        print(f"SCENARIO GEN ASYNC Traceback: {traceback.format_exc()}", flush=True)
+        return "ERROR: SCENARIO DATA CORRUPTED. You are suspended in static. Something moves in the noise."
 
 
 async def judge_strategy_llm_async(scenario: str, strategy: str):
@@ -282,15 +310,58 @@ async def generate_character_image_async(character_prompt: str, style_theme: str
     if not style_theme:
         style_theme = random.choice(IMAGE_STYLE_THEMES)
 
-    # Build a rich prompt that shows the character in an action scene with all their traits
-    base_prompt = f"""Dynamic character portrait in an action pose. {character_prompt}.
-The character should be shown in a dramatic survival scenario moment, displaying their personality and equipment.
-Full scene with background, cinematic lighting, highly detailed, game character art."""
 
-    full_prompt = apply_style_theme(base_prompt, style_theme)
+    # randomly select a look from a list of looks for a game character:
+    looks = [
+        "cute",
+        "fierce",
+        "nerdy",
+        "punk",
+        "goth",
+        "hipster",
+        "gamer",
+        "cyberpunk",
+
+    ]
+    random_look = random.choice(looks)
+
+    moments = [
+        "laughing",
+        "fighting with squirrels",
+        "drinking beer",
+        "eating a sandwich",
+        "sleeping",
+        "dancing",
+        "singing",
+        "playing with a cat",
+        "playing with a dog",
+    ]
+    random_moment = random.choice(moments)
+
+    character_styles = [
+        "cyberpunk",
+        "lego movie"
+        "noir",
+        "anime",
+        "vaporwave",
+        "pixel art",
+        "low poly",
+        "retro",
+        "1960's space art",
+        "steampunk",
+    ]
+    random_character_style = random.choice(character_styles)
+
+    # Build a rich prompt that shows the character in an action scene with all their traits
+    full_character_prompt = f"""Game character looking {random_look} in the style of {random_character_style}. The character's description is as follows:
+
+{character_prompt}.
+
+The character is mid {random_moment}, displaying their true personality and equipment.
+Full scene is the style of {random_character_style}."""
 
     print(f"CHARACTER IMG: Generating with style: {style_theme[:40]}...", flush=True)
-    print(f"CHARACTER IMG: Full prompt: {full_prompt[:100]}...", flush=True)
+    print(f"CHARACTER IMG: Full prompt: {full_character_prompt[:100]}...", flush=True)
 
     url = "https://fal.run/fal-ai/flux/krea"
     headers = {
@@ -298,7 +369,7 @@ Full scene with background, cinematic lighting, highly detailed, game character 
         "Content-Type": "application/json"
     }
     payload = {
-        "prompt": full_prompt,
+        "prompt": full_character_prompt,
         "image_size": "square",  # Square for avatars
         "num_inference_steps": 28
     }
@@ -551,6 +622,7 @@ class Player(BaseModel):
     score: int = 0
     is_admin: bool = False
     is_alive: bool = True
+    in_lobby: bool = False  # Whether player has clicked "Enter Lobby" after avatar preview
     death_reason: Optional[str] = None
     survival_reason: Optional[str] = None  # How they survived
     strategy: Optional[str] = None  # Current round strategy
@@ -600,6 +672,8 @@ class GameState(BaseModel):
     round_config: List[str] = Field(default_factory=lambda: [
         "survival", "survival", "cooperative", "survival", "blind_architect"
     ])
+    # Pre-warmed scenarios generated in parallel when game is created
+    prewarmed_scenarios: List[str] = []  # Index corresponds to round number - 1
     # End game video fields - videos for ALL players
     player_videos: Dict[str, str] = {}  # player_id -> video URL
     videos_status: Literal["pending", "generating", "ready", "failed"] = "pending"
@@ -640,6 +714,11 @@ async def api_create_game(request: Request):
     code = shortuuid.ShortUUID().random(length=4).upper()
     game = GameState(id=str(uuid.uuid4()), code=code)
     save_game(game)
+
+    # Spawn background task to pre-warm ALL scenarios in parallel
+    print(f"API: Spawning scenario pre-warming for game {code}", flush=True)
+    prewarm_all_scenarios.spawn(code)
+
     return {"code": code, "game_id": game.id}
 
 @web_app.post("/api/join_game")
@@ -668,8 +747,30 @@ async def api_join_game(request: Request):
     if character_description:
         print(f"API: Spawning character image generation for {player_name}", flush=True)
         generate_character_image.spawn(code, player_id, character_description)
+    else:
+        # No character description means they skip preview, so auto-enter lobby
+        game.players[player_id].in_lobby = True
+        save_game(game)
 
     return {"player_id": player_id, "is_admin": is_first}
+
+
+@web_app.post("/api/enter_lobby")
+async def api_enter_lobby(request: Request):
+    """Mark a player as having entered the lobby (after avatar preview)."""
+    code = request.query_params.get("code")
+    data = await request.json()
+    player_id = data.get("player_id")
+
+    game = get_game(code)
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    if player_id not in game.players:
+        raise HTTPException(status_code=404, detail="Player not found")
+
+    game.players[player_id].in_lobby = True
+    save_game(game)
+    return {"status": "entered"}
 
 @web_app.get("/api/get_game_state")
 async def api_get_game_state(request: Request):
@@ -718,20 +819,23 @@ def get_system_message(round_num: int, max_rounds: int, round_type: str) -> str:
 async def api_start_game(request: Request):
     print("API: Start Game Called")
     code = request.query_params.get("code")
-    # Quick check first
     game = get_game(code)
     if not game:
         print("API: Game not found")
         raise HTTPException(status_code=404, detail="Game not found")
 
-    print("API: Generating Scenario...")
-    # Generate scenario first (slow operation) with max_rounds context
-    scenario_text = generate_scenario_llm(1, game.max_rounds)
-    print(f"API: Scenario Generated: {scenario_text}")
-
-    # Re-fetch game state to avoid overwriting updates (heartbeats) that happened during generation
-    game = get_game(code)
-    if not game: raise HTTPException(status_code=404, detail="Game disappeared")
+    # Use pre-warmed scenario if available, otherwise generate on-demand (fallback)
+    if game.prewarmed_scenarios and len(game.prewarmed_scenarios) > 0 and game.prewarmed_scenarios[0]:
+        scenario_text = game.prewarmed_scenarios[0]
+        print(f"API: Using pre-warmed scenario: {scenario_text[:50]}...")
+    else:
+        print("API: No pre-warmed scenario, generating on-demand...")
+        scenario_text = generate_scenario_llm(1, game.max_rounds)
+        print(f"API: Scenario Generated: {scenario_text}")
+        # Re-fetch after slow operation
+        game = get_game(code)
+        if not game:
+            raise HTTPException(status_code=404, detail="Game disappeared")
 
     print(f"API: Starting game {code}")
     game.status = "playing"
@@ -743,7 +847,6 @@ async def api_start_game(request: Request):
     first_round.scenario_text = scenario_text
     first_round.status = "strategy"  # Both survival and cooperative start with strategy
     first_round.style_theme = random.choice(IMAGE_STYLE_THEMES)
-    first_round.sector_name = generate_sector_name_llm(scenario_text, first_round.style_theme)
     first_round.system_message = get_system_message(1, game.max_rounds, first_round_type)
     game.rounds.append(first_round)
 
@@ -818,6 +921,66 @@ def generate_character_image(game_code: str, player_id: str, character_prompt: s
             print(f"CHARACTER IMG: Failed to generate for {player_id}", flush=True)
 
     asyncio.run(do_generation())
+
+
+@app.function(image=image, secrets=secrets)
+def prewarm_all_scenarios(game_code: str):
+    """Pre-generate scenarios for ALL rounds in parallel when game is created."""
+    import asyncio
+
+    async def do_prewarm():
+        game = get_game(game_code)
+        if not game:
+            print(f"PREWARM: Game {game_code} not found!", flush=True)
+            return
+
+        if game.status != "lobby":
+            print(f"PREWARM: Game {game_code} not in lobby, skipping", flush=True)
+            return
+
+        max_rounds = game.max_rounds
+        round_config = game.round_config
+
+        # Determine which rounds need scenarios (survival and cooperative, not blind_architect)
+        tasks = []
+        round_indices = []
+        for i in range(max_rounds):
+            round_type = round_config[i] if i < len(round_config) else "survival"
+            if round_type != "blind_architect":
+                # Generate scenario for this round
+                tasks.append(generate_scenario_llm_async(i + 1, max_rounds))
+                round_indices.append(i)
+
+        if not tasks:
+            print(f"PREWARM: No scenarios to generate for {game_code}", flush=True)
+            return
+
+        print(f"PREWARM: Generating {len(tasks)} scenarios in parallel for {game_code}...", flush=True)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Re-fetch game to avoid overwriting other changes
+        game = get_game(game_code)
+        if not game or game.status != "lobby":
+            print(f"PREWARM: Game {game_code} changed, discarding results", flush=True)
+            return
+
+        # Build scenarios list (None for blind_architect rounds)
+        scenarios = [None] * max_rounds
+        for idx, round_idx in enumerate(round_indices):
+            result = results[idx]
+            if isinstance(result, Exception):
+                print(f"PREWARM: Error for round {round_idx + 1}: {result}", flush=True)
+                scenarios[round_idx] = None
+            else:
+                scenarios[round_idx] = result
+                print(f"PREWARM: Round {round_idx + 1} ready: {result[:50]}...", flush=True)
+
+        game.prewarmed_scenarios = scenarios
+        save_game(game)
+        print(f"PREWARM: Complete! {len([s for s in scenarios if s])} scenarios saved", flush=True)
+
+    asyncio.run(do_prewarm())
+
 
 @app.function(image=image, secrets=secrets)
 def run_round_judgement(game_code: str):
@@ -1307,14 +1470,14 @@ async def api_submit_strategy(request: Request):
         # so a re-fetch might not see the strategy we just set. Use the same game object.
         # See CLAUDE.md "Known Issues" section for details.
 
-        # Filter for active players (active in last 60s)
+        # Filter for active players who are in the lobby (active in last 60s)
         cutoff = time.time() - 60
 
         alive_players = []
         for pid, p in game.players.items():
             is_active = p.last_active > cutoff
-            # print(f"API: Player {pid} ...") # Reduce noise
-            if p.is_alive and is_active:
+            # Only count players who have entered the lobby (not still in avatar preview)
+            if p.is_alive and is_active and p.in_lobby:
                 alive_players.append(p)
         
         if not alive_players:
@@ -1371,10 +1534,10 @@ async def api_submit_trap(request: Request):
     img_url = generate_image_fal(themed_prompt)
     if img_url: current_round.trap_images[player_id] = img_url
         
-    alive_players = [p for p in game.players.values() if p.is_alive]
+    alive_players = [p for p in game.players.values() if p.is_alive and p.in_lobby]
     if len(current_round.trap_proposals) >= len(alive_players):
         current_round.status = "trap_voting"
-        
+
     save_game(game)
     return {"status": "trap_submitted"}
 
@@ -1390,8 +1553,8 @@ async def api_vote_trap(request: Request):
     
     current_round = game.rounds[game.current_round_idx]
     current_round.votes[voter_id] = target_id
-    
-    alive_players = [p for p in game.players.values() if p.is_alive]
+
+    alive_players = [p for p in game.players.values() if p.is_alive and p.in_lobby]
     if len(current_round.votes) >= len(alive_players):
         vote_counts = {}
         for target in current_round.votes.values():
@@ -1435,8 +1598,8 @@ async def api_vote_coop(request: Request):
     current_round.coop_votes[voter_id] = target_id
     print(f"COOP VOTE: {voter_id} voted for {target_id}", flush=True)
 
-    # Check if all alive players have voted
-    alive_players = [p for p in game.players.values() if p.is_alive]
+    # Check if all alive players in lobby have voted
+    alive_players = [p for p in game.players.values() if p.is_alive and p.in_lobby]
     if len(current_round.coop_votes) >= len(alive_players):
         print("COOP VOTE: All votes in, tallying...", flush=True)
         # Tally votes and transition to coop_judgement
@@ -1495,12 +1658,16 @@ async def api_next_round(request: Request):
     if round_type == "blind_architect":
         new_round.status = "trap_creation"
         new_round.scenario_text = "ARCHITECT MODE: Design a deadly scenario for your opponents."
-        new_round.sector_name = "ARCHITECT DOMAIN"  # Fixed name for architect mode
     else:
         # Both survival and cooperative start with strategy phase
         new_round.status = "strategy"
-        new_round.scenario_text = generate_scenario_llm(next_idx + 1, game.max_rounds)
-        new_round.sector_name = generate_sector_name_llm(new_round.scenario_text, new_round.style_theme)
+        # Use pre-warmed scenario if available
+        if game.prewarmed_scenarios and next_idx < len(game.prewarmed_scenarios) and game.prewarmed_scenarios[next_idx]:
+            new_round.scenario_text = game.prewarmed_scenarios[next_idx]
+            print(f"API: Using pre-warmed scenario for round {next_idx + 1}", flush=True)
+        else:
+            print(f"API: No pre-warmed scenario for round {next_idx + 1}, generating on-demand...", flush=True)
+            new_round.scenario_text = generate_scenario_llm(next_idx + 1, game.max_rounds)
 
     save_game(game)
     return {"status": "started_round", "round": next_idx + 1, "type": round_type}

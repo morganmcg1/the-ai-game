@@ -8,27 +8,27 @@ const CHARACTER_FIELDS = [
     {
         id: 'look',
         label: 'PHYSICAL VIBE',
-        placeholder: 'e.g., "wild purple hair, leather jacket, mysterious scar"'
+        placeholder: '"wild purple hair, leather jacket, mysterious scar"'
     },
     {
         id: 'weapon',
         label: 'SIGNATURE WEAPON',
-        placeholder: 'e.g., "rusty machete", "flaming guitar", "pocket sand"'
+        placeholder: '"rusty machete", "flaming guitar", "pocket sand"'
     },
     {
         id: 'talent',
         label: 'HIDDEN TALENT',
-        placeholder: 'e.g., "can talk to animals", "expert lockpicker", "never sleeps"'
+        placeholder: '"can talk to animals", "expert lockpicker", "never sleeps"'
     },
     {
         id: 'flaw',
         label: 'FATAL FLAW',
-        placeholder: 'e.g., "trusts everyone", "allergic to running", "speaks too loud"'
+        placeholder: '"trusts everyone", "allergic to running", "speaks too loud"'
     },
     {
         id: 'catchphrase',
         label: 'CATCHPHRASE',
-        placeholder: 'e.g., "I\'ve seen worse", "Hold my beer", "Not again..."'
+        placeholder: '"I\'ve seen worse", "Hold my beer", "Not again..."'
     }
 ];
 
@@ -199,8 +199,10 @@ export function Lobby({ onJoin, onAdmin, setPlayerId }) {
     };
 
     // Proceed from preview to actual lobby
-    const handleContinueToLobby = () => {
+    const handleContinueToLobby = async () => {
         if (!previewData) return;
+        // Notify backend that player has entered the lobby
+        await api.enterLobby(previewData.gameCode, previewData.playerId);
         onAdmin(previewData.isAdmin);
         onJoin(previewData.gameCode, previewData.playerId, name);
         setPlayerId(previewData.playerId);

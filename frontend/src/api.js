@@ -92,5 +92,14 @@ export const api = {
             body: JSON.stringify({ player_id: playerId }),
         });
         return res.json();
+    },
+
+    enterLobby: async (code, playerId) => {
+        const res = await fetch(`${getUrl("enter_lobby")}?code=${code}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ player_id: playerId }),
+        });
+        return res.json();
     }
 };

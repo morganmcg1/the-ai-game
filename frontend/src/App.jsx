@@ -370,9 +370,9 @@ function App() {
           </button>
         </div>
         <p style={{ color: 'var(--secondary)', fontSize: '0.9rem', marginTop: '0.5rem', opacity: 0.8 }}>waiting for players to join...</p>
-        {/* Player cards with character images */}
+        {/* Player cards with character images - only show players who have entered the lobby (or self) */}
         <div style={{ margin: '2rem 0', display: 'flex', gap: '1.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
-          {Object.values(gameState.players).map(p => {
+          {Object.values(gameState.players).filter(p => p.in_lobby || p.id === playerId).map(p => {
             const isMe = p.id === playerId;
             const hasImage = !!p.character_image_url;
             const hasDescription = !!p.character_description;
