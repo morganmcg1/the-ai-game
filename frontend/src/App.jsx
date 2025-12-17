@@ -6,8 +6,178 @@ import { ResultsView } from './components/ResultsView';
 import { TrapView } from './components/TrapView';
 import { VotingView } from './components/VotingView';
 import { CoopVotingView } from './components/CoopVotingView';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, RefreshCw, Trophy, Video, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api } from './api';
+
+// Video waiting card component
+const VideoWaitingCard = ({ playerCount }) => (
+  <div className="card" style={{
+    textAlign: 'center',
+    padding: '3rem 2rem',
+    background: 'linear-gradient(135deg, rgba(0,255,0,0.05) 0%, rgba(0,100,0,0.1) 100%)',
+    border: '2px solid #0f0',
+    maxWidth: '500px',
+    margin: '0 auto'
+  }}>
+    <Video size={64} style={{ color: '#0f0', marginBottom: '1.5rem' }} />
+    <h2 style={{ color: '#0f0', marginBottom: '1rem', fontFamily: 'monospace' }}>EXTRACTING CONSCIOUSNESS DATA</h2>
+    <p style={{ color: 'var(--secondary)', marginBottom: '1.5rem', fontFamily: 'monospace' }}>
+      Rendering extraction sequences for {playerCount} user{playerCount > 1 ? 's' : ''}...
+    </p>
+    <div className="loader" style={{ margin: '0 auto' }}></div>
+    <p style={{ color: '#888', fontSize: '0.85rem', marginTop: '1.5rem', fontFamily: 'monospace' }}>
+      ETA: 2-4 minutes
+    </p>
+  </div>
+);
+
+// Player video carousel component
+const PlayerVideoCarousel = ({ sortedPlayers, playerVideos }) => {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const videoRef = useRef(null);
+
+  // Filter to players who have videos
+  const playersWithVideos = sortedPlayers.filter(p => playerVideos[p.id]);
+
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.play().catch(e => console.log('Autoplay blocked:', e));
+    }
+  }, [currentIndex]);
+
+  const handleVideoEnd = () => {
+    // Auto-advance to next video
+    if (currentIndex < playersWithVideos.length - 1) {
+      setCurrentIndex(prev => prev + 1);
+    }
+  };
+
+  const goToPrev = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex(prev => prev - 1);
+    }
+  };
+
+  const goToNext = () => {
+    if (currentIndex < playersWithVideos.length - 1) {
+      setCurrentIndex(prev => prev + 1);
+    }
+  };
+
+  if (playersWithVideos.length === 0) {
+    return null;
+  }
+
+  const currentPlayer = playersWithVideos[currentIndex];
+  const isWinner = currentIndex === 0;
+  const rankColors = ['#FFD700', '#C0C0C0', '#CD7F32'];
+  const rankLabels = ['1st', '2nd', '3rd'];
+  const borderColor = rankColors[currentIndex] || 'var(--primary)';
+
+  return (
+    <div style={{
+      textAlign: 'center',
+      padding: '1rem',
+      maxWidth: '800px',
+      margin: '0 auto'
+    }}>
+      {isWinner && <Trophy size={48} style={{ color: '#FFD700', marginBottom: '1rem' }} />}
+
+      <h2 style={{ color: borderColor, marginBottom: '0.5rem' }}>
+        {isWinner ? `${currentPlayer.name} IS THE CHAMPION!` : `${rankLabels[currentIndex] || `${currentIndex + 1}th`} PLACE: ${currentPlayer.name}`}
+      </h2>
+      <p style={{ color: 'var(--secondary)', marginBottom: '1rem', fontSize: '1.2rem' }}>
+        {currentPlayer.score.toLocaleString()} PTS
+      </p>
+
+      <video
+        ref={videoRef}
+        key={currentPlayer.id}
+        src={playerVideos[currentPlayer.id]}
+        controls
+        autoPlay
+        playsInline
+        onEnded={handleVideoEnd}
+        style={{
+          width: '100%',
+          maxWidth: '720px',
+          borderRadius: '12px',
+          border: `3px solid ${borderColor}`,
+          boxShadow: `0 0 30px ${borderColor}33`
+        }}
+      />
+
+      {/* Navigation */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: '1rem',
+        marginTop: '1.5rem'
+      }}>
+        <button
+          onClick={goToPrev}
+          disabled={currentIndex === 0}
+          style={{
+            background: currentIndex === 0 ? '#333' : 'var(--surface)',
+            border: '1px solid var(--primary)',
+            borderRadius: '50%',
+            width: '40px',
+            height: '40px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: currentIndex === 0 ? 'not-allowed' : 'pointer',
+            opacity: currentIndex === 0 ? 0.5 : 1
+          }}
+        >
+          <ChevronLeft size={24} color="var(--primary)" />
+        </button>
+
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          {playersWithVideos.map((p, idx) => (
+            <button
+              key={p.id}
+              onClick={() => setCurrentIndex(idx)}
+              style={{
+                width: '12px',
+                height: '12px',
+                borderRadius: '50%',
+                border: 'none',
+                background: idx === currentIndex ? (rankColors[idx] || 'var(--primary)') : '#444',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+            />
+          ))}
+        </div>
+
+        <button
+          onClick={goToNext}
+          disabled={currentIndex === playersWithVideos.length - 1}
+          style={{
+            background: currentIndex === playersWithVideos.length - 1 ? '#333' : 'var(--surface)',
+            border: '1px solid var(--primary)',
+            borderRadius: '50%',
+            width: '40px',
+            height: '40px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: currentIndex === playersWithVideos.length - 1 ? 'not-allowed' : 'pointer',
+            opacity: currentIndex === playersWithVideos.length - 1 ? 0.5 : 1
+          }}
+        >
+          <ChevronRight size={24} color="var(--primary)" />
+        </button>
+      </div>
+
+      <p style={{ color: '#888', marginTop: '0.75rem', fontSize: '0.9rem' }}>
+        Video {currentIndex + 1} of {playersWithVideos.length}
+      </p>
+    </div>
+  );
+};
 
 const GameHeader = ({ currentRound, maxRounds, score, playerName }) => {
   const progress = (currentRound / maxRounds) * 100;
@@ -200,12 +370,66 @@ function App() {
           </button>
         </div>
         <p style={{ color: 'var(--secondary)', fontSize: '0.9rem', marginTop: '0.5rem', opacity: 0.8 }}>waiting for players to join...</p>
-        <div style={{ margin: '2rem 0', display: 'flex', gap: '1rem', flexWrap: 'wrap', justifyContent: 'center' }}>
-          {Object.values(gameState.players).map(p => (
-            <div key={p.id} style={{ padding: '8px 16px', borderRadius: '20px', background: 'var(--surface)', border: '1px solid var(--primary)' }}>
-              {p.name} {p.is_admin ? '(HOST)' : ''}
-            </div>
-          ))}
+        {/* Player cards with character images */}
+        <div style={{ margin: '2rem 0', display: 'flex', gap: '1.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+          {Object.values(gameState.players).map(p => {
+            const isMe = p.id === playerId;
+            const hasImage = !!p.character_image_url;
+            const hasDescription = !!p.character_description;
+
+            return (
+              <div
+                key={p.id}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  padding: '1rem',
+                  borderRadius: '12px',
+                  background: 'var(--surface)',
+                  border: isMe ? '2px solid var(--primary)' : '1px solid #333',
+                  minWidth: '140px',
+                  maxWidth: '160px'
+                }}
+              >
+                {/* Character image or placeholder */}
+                <div style={{
+                  width: '100px',
+                  height: '100px',
+                  borderRadius: '8px',
+                  overflow: 'hidden',
+                  marginBottom: '0.75rem',
+                  background: '#1a1a1a',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  {hasImage ? (
+                    <img
+                      src={p.character_image_url}
+                      alt={`${p.name}'s character`}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  ) : hasDescription ? (
+                    <div style={{ textAlign: 'center' }}>
+                      <span className="spinner" style={{ width: '24px', height: '24px' }}></span>
+                      <div style={{ fontSize: '0.7rem', color: '#666', marginTop: '0.5rem' }}>Generating...</div>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: '2.5rem', opacity: 0.3 }}>?</div>
+                  )}
+                </div>
+
+                {/* Player name */}
+                <div style={{ fontWeight: 'bold', marginBottom: '0.25rem' }}>
+                  {p.name}
+                </div>
+                {p.is_admin && (
+                  <div style={{ fontSize: '0.75rem', color: 'var(--primary)' }}>HOST</div>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         {isAdmin ? (
@@ -239,23 +463,67 @@ function App() {
     );
   }
 
-  // Game finished - show final results
+  // Game finished - show final results with player videos
   if (gameState.status === 'finished') {
     const sortedPlayers = Object.values(gameState.players).sort((a, b) => b.score - a.score);
     const winner = sortedPlayers[0];
+    const videoStatus = gameState.videos_status || 'pending';
+    const playerVideos = gameState.player_videos || {};
+    const hasAnyVideos = Object.keys(playerVideos).length > 0;
+
+    const handleRetryVideos = async () => {
+      if (gameCode) {
+        await api.retryPlayerVideos(gameCode);
+      }
+    };
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2rem', padding: '2rem' }}>
-        <h1 className="glitch-text" style={{ fontSize: '3rem', textAlign: 'center' }}>GAME OVER</h1>
+        <h1 className="glitch-text" style={{ fontSize: '3rem', textAlign: 'center' }}>EXIT PROTOCOL COMPLETE</h1>
+        <p style={{ fontFamily: 'monospace', color: '#0f0', textAlign: 'center', marginTop: '-1rem' }}>
+          &gt; SIMULATION TERMINATED // CONSCIOUSNESS EXTRACTION IN PROGRESS
+        </p>
 
-        <div className="card" style={{ textAlign: 'center', padding: '2rem', border: '2px solid #FFD700' }}>
-          <h2 style={{ color: '#FFD700', marginBottom: '1rem' }}>WINNER</h2>
-          <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: 'var(--primary)' }}>{winner?.name}</div>
-          <div style={{ fontSize: '1.5rem', color: '#FFD700', marginTop: '0.5rem' }}>{winner?.score.toLocaleString()} PTS</div>
-        </div>
+        {/* Video section - show based on status */}
+        {(videoStatus === 'generating' || videoStatus === 'pending') && (
+          <VideoWaitingCard playerCount={sortedPlayers.length} />
+        )}
+
+        {videoStatus === 'ready' && hasAnyVideos && (
+          <PlayerVideoCarousel sortedPlayers={sortedPlayers} playerVideos={playerVideos} />
+        )}
+
+        {videoStatus === 'failed' && (
+          <div className="card" style={{ textAlign: 'center', padding: '2rem', border: '2px solid #ff4444', maxWidth: '500px' }}>
+            <h2 style={{ color: '#ff4444', marginBottom: '1rem' }}>VIDEO GENERATION FAILED</h2>
+            <p style={{ color: 'var(--secondary)', marginBottom: '1.5rem' }}>
+              The AI couldn't create the player videos. You can try again.
+            </p>
+            <button
+              className="primary"
+              onClick={handleRetryVideos}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0 auto' }}
+            >
+              <RefreshCw size={18} />
+              RETRY VIDEOS
+            </button>
+          </div>
+        )}
+
+        {/* Winner card - show if videos not ready yet */}
+        {(videoStatus !== 'ready' || !hasAnyVideos) && (
+          <div className="card" style={{ textAlign: 'center', padding: '2rem', border: '2px solid #FFD700' }}>
+            <h2 style={{ color: '#FFD700', marginBottom: '1rem', fontFamily: 'monospace' }}>PRIMARY SURVIVOR</h2>
+            <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: 'var(--primary)' }}>{winner?.name}</div>
+            <div style={{ fontSize: '1.5rem', color: '#FFD700', marginTop: '0.5rem' }}>{winner?.score.toLocaleString()} INTEGRITY PTS</div>
+            <p style={{ fontFamily: 'monospace', color: '#0f0', marginTop: '1rem', fontSize: '0.9rem' }}>
+              CONSCIOUSNESS EXTRACTED SUCCESSFULLY
+            </p>
+          </div>
+        )}
 
         <div className="card" style={{ width: '100%', maxWidth: '500px', padding: '1.5rem' }}>
-          <h3 style={{ textAlign: 'center', marginBottom: '1.5rem', color: 'var(--primary)' }}>FINAL STANDINGS</h3>
+          <h3 style={{ textAlign: 'center', marginBottom: '1.5rem', color: 'var(--primary)', fontFamily: 'monospace' }}>EXTRACTION LOG</h3>
           {sortedPlayers.map((p, index) => {
             const rankColors = ['#FFD700', '#C0C0C0', '#CD7F32'];
             const rankLabels = ['1st', '2nd', '3rd'];
@@ -286,7 +554,7 @@ function App() {
         </div>
 
         <button className="primary" onClick={() => window.location.reload()}>
-          PLAY AGAIN
+          RE-ENTER SIMULATION
         </button>
       </div>
     );
@@ -326,8 +594,8 @@ function App() {
           <div style={{ textAlign: 'center' }}>
             {header}
             <ScenarioView round={currentRound} isSpectating={true} />
-            <div style={{ marginTop: '2rem', color: 'var(--secondary)' }}>
-              {isDead ? "YOU ARE DEAD. WITNESS THE CARNAGE." : "STRATEGY UPLOADED. AWAITING JUDGEMENT."}
+            <div style={{ marginTop: '2rem', color: 'var(--secondary)', fontFamily: 'monospace' }}>
+              {isDead ? "&gt; STATUS: TERMINATED // OBSERVING OTHER USERS..." : "&gt; PROTOCOL UPLOADED // AWAITING SYSTEM EVALUATION..."}
             </div>
           </div>
         );
@@ -345,8 +613,10 @@ function App() {
       return (
         <div className="card" style={{ textAlign: 'center' }}>
           {header}
-          <h2 className="glitch-text">JUDGING...</h2>
-          <p>The AI is deciding your fate.</p>
+          <h2 className="glitch-text">EVALUATING...</h2>
+          <p style={{ fontFamily: 'monospace', color: 'var(--secondary)' }}>
+            &gt; PROCESSING SURVIVAL PROTOCOLS...
+          </p>
           <span className="loader"></span>
         </div>
       );
@@ -388,8 +658,10 @@ function App() {
       return (
         <div className="card" style={{ textAlign: 'center' }}>
           {header}
-          <h2 className="glitch-text">TEAM JUDGEMENT...</h2>
-          <p style={{ color: 'var(--secondary)' }}>The AI is judging your collective fate.</p>
+          <h2 className="glitch-text">SYNC EVALUATION...</h2>
+          <p style={{ fontFamily: 'monospace', color: 'var(--secondary)' }}>
+            &gt; ANALYZING COLLECTIVE PROTOCOL...
+          </p>
           <span className="loader"></span>
         </div>
       );

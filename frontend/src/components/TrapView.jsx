@@ -27,8 +27,8 @@ export function TrapView({ round, playerId, onSubmit }) {
     if (round.trap_proposals && round.trap_proposals[playerId]) {
         return (
             <div className="card" style={{ textAlign: 'center' }}>
-                <h2>TRAP DESIGNED</h2>
-                <p>Your blueprint has been submitted. The AI is visualizing your doom...</p>
+                <h2 style={{ fontFamily: 'monospace', color: 'var(--accent)' }}>ENVIRONMENT UPLOADED</h2>
+                <p style={{ fontFamily: 'monospace', color: '#0f0' }}>&gt; Rendering deadly scenario...</p>
                 <span className="loader"></span>
             </div>
         );
@@ -36,15 +36,30 @@ export function TrapView({ round, playerId, onSubmit }) {
 
     return (
         <div className="card">
-            <h2 style={{ marginBottom: '1rem', color: 'var(--accent)' }}>BLIND ARCHITECT</h2>
-            <p style={{ marginBottom: '1.5rem', opacity: 0.8 }}>
-                Design a scenario to kill your opponents. The best visual wins.
+            {/* System breach header */}
+            <div style={{
+                fontFamily: 'monospace',
+                color: '#f00',
+                fontSize: '0.8rem',
+                marginBottom: '1rem',
+                padding: '0.5rem',
+                background: 'rgba(255, 0, 0, 0.1)',
+                border: '1px solid rgba(255, 0, 0, 0.3)',
+                borderRadius: '4px',
+                animation: 'flicker 2s infinite'
+            }}>
+                &gt; SECURITY BREACH // ARCHITECT PERMISSIONS GRANTED
+            </div>
+
+            <h2 style={{ marginBottom: '1rem', color: 'var(--accent)', fontFamily: 'monospace' }}>ARCHITECT MODE</h2>
+            <p style={{ marginBottom: '1.5rem', opacity: 0.8, fontFamily: 'monospace' }}>
+                You have accessed the simulation's core. Design a deadly environment for other users.
             </p>
 
             <textarea
                 value={trapText}
                 onChange={(e) => setTrapText(e.target.value)}
-                placeholder="A room filled with laser sharks..."
+                placeholder="A laboratory where gravity reverses every 10 seconds..."
                 style={{
                     width: '100%',
                     minHeight: '120px',
@@ -54,7 +69,8 @@ export function TrapView({ round, playerId, onSubmit }) {
                     padding: '1rem',
                     borderRadius: '8px',
                     marginBottom: '1.5rem',
-                    resize: 'vertical'
+                    resize: 'vertical',
+                    fontFamily: 'inherit'
                 }}
             />
 
@@ -64,7 +80,7 @@ export function TrapView({ round, playerId, onSubmit }) {
                 disabled={loading || !trapText.trim()}
                 style={{ width: '100%', backgroundColor: 'var(--accent)', color: 'black' }}
             >
-                {loading ? 'CONSTRUCTING...' : 'SUBMIT TRAP'}
+                {loading ? 'COMPILING ENVIRONMENT...' : 'UPLOAD ENVIRONMENT'}
                 {!loading && <span style={{ opacity: 0.6, fontSize: '0.75rem', marginLeft: '0.5rem' }}>(⌘↵)</span>}
             </button>
         </div>

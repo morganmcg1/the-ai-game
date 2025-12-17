@@ -75,8 +75,8 @@ def run_full_walkthrough():
     log(f"   Scenario: {r1['scenario_text']}")
     
     log("4. Submitting Strategies...")
-    requests.post(get_url("submit_strategy"), params={"code": code}, json={"player_id": p1_id, "strategy": "I use a shield."})
-    requests.post(get_url("submit_strategy"), params={"code": code}, json={"player_id": p2_id, "strategy": "I run away."})
+    requests.post(get_url("submit_strategy"), params={"code": code}, json={"player_id": p1_id, "strategy": "I use the scuba gear I found to breathe and swim to the surface through the designated exit."})
+    requests.post(get_url("submit_strategy"), params={"code": code}, json={"player_id": p2_id, "strategy": "I use a submarine to navigate the hazards safely."})
     
     log(">>> ROUND 1: Waiting for Judgement Results...")
     # This triggers LLM judgement

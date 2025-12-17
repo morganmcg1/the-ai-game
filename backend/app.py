@@ -10,6 +10,55 @@ import time
 import uuid
 import random
 
+# --- Video Style Themes ---
+# Each game ending randomly selects one theme for all player videos
+VIDEO_STYLE_THEMES = [
+    "epic fantasy awards ceremony, golden throne room, medieval banners, torchlight",
+    "cyberpunk neon awards show, holographic displays, chrome stage, rain-slicked city",
+    "retro 80s game show, pixel confetti, arcade cabinet aesthetic, synthwave colors",
+    "underwater atlantis celebration, bioluminescent lights, coral palace, bubbles rising",
+    "space station victory ceremony, zero gravity confetti, stars visible through windows",
+    "ancient colosseum triumph, roman columns, laurel wreaths, dramatic sunset",
+    "haunted victorian mansion celebration, gothic chandeliers, spooky elegance",
+    "jungle temple discovery, aztec gold, torch-lit ruins, exotic birds",
+    "steampunk airship deck, brass gears, clouds below, goggles and top hats",
+    "anime tournament finals, dramatic speed lines, cherry blossoms, epic poses",
+]
+
+
+# --- Image Style Themes ---
+# Each round randomly selects one theme for visual consistency
+IMAGE_STYLE_THEMES = [
+    "16-bit pixel art, retro video game aesthetic, vibrant pixel colors",
+    "8-bit NES style, chunky pixels, limited color palette, nostalgic gaming",
+    "claymation stop-motion style, plasticine textures, handcrafted look",
+    "vaporwave aesthetic, pink and cyan, greek statues, 80s nostalgia, glitch effects",
+    "comic book style, bold ink outlines, halftone dots, POW BAM action panels",
+    "anime style, dramatic speed lines, expressive eyes, vibrant colors",
+    "dark souls aesthetic, gothic fantasy, ominous lighting, oppressive atmosphere",
+    "borderlands style, cel-shaded, heavy black outlines, gritty comic look",
+    "synthwave neon, 80s retrowave, grid landscapes, chrome and pink",
+    "Studio Ghibli style, soft watercolors, whimsical, detailed backgrounds",
+    "low-poly 3D, geometric facets, vibrant flat colors, PS1 aesthetic",
+    "tarot card style, ornate borders, mystical symbolism, art nouveau",
+    "ukiyo-e japanese woodblock print, bold outlines, flat colors, waves",
+    "cyberpunk 2077 style, neon signs, rain-slicked streets, chrome implants",
+    "tim burton style, gothic whimsy, spirals, pale characters, dark humor",
+    "mad max fury road, desert apocalypse, rust and chrome, war rigs",
+    "stained glass window, luminous colors, black leading, religious imagery",
+    "rick and morty style, wobbly lines, interdimensional chaos, bright colors",
+    "medieval manuscript illumination, gold leaf, ornate borders, flat perspective",
+    "noir detective style, black and white, dramatic shadows, venetian blinds",
+]
+
+
+def apply_style_theme(prompt: str, style_theme: str | None) -> str:
+    """Append the round's style theme to an image prompt for visual consistency."""
+    if style_theme:
+        return f"{prompt}, in the style of {style_theme}"
+    return prompt
+
+
 # --- Image & Model Definitions ---
 image = modal.Image.debian_slim().pip_install(
     "pydantic",
@@ -30,29 +79,94 @@ def get_llm_client():
         api_key=os.environ["MOONSHOT_API_KEY"], 
     )
 
-def generate_scenario_llm(round_num: int):
+def generate_scenario_llm(round_num: int, max_rounds: int = 5):
+    """Generate a scenario with Corrupted Simulation narrative framing."""
     client = get_llm_client()
-    prompt = f"Generate a short, deadly, creative survival scenario for round {round_num} of a game (max 2 sentences). Example: 'You have fallen into a pit of snakes.'."
+
+    # Narrative phase based on progression
+    if round_num == 1:
+        phase = "initialization sequence"
+        corruption = "minor data artifacts"
+        narrative_hint = "The simulation is just booting up, things seem almost normal but slightly off."
+    elif round_num == 2:
+        phase = "calibration protocol"
+        corruption = "increasing instability"
+        narrative_hint = "The system is trying to calibrate but errors are creeping in."
+    elif round_num == max_rounds:
+        phase = "exit protocol - final level"
+        corruption = "critical system failure, reality breaking down"
+        narrative_hint = "This is the final test before escape. Everything is falling apart."
+    else:
+        phase = "corrupted memory sector"
+        corruption = "severe fragmentation"
+        narrative_hint = "Deep in corrupted data, reality is unreliable."
+
+    prompt = f"""You are a malfunctioning AI simulation generating deadly survival scenarios.
+
+This is LEVEL {round_num} of {max_rounds} - {phase} with {corruption}.
+Context: {narrative_hint}
+
+Generate a short, deadly survival scenario (2-3 sentences max).
+The scenario can be ANY setting (jungle, space station, medieval castle, underwater lab,
+haunted house, alien planet, etc.) because the simulation is pulling from fragmented data archives.
+
+IMPORTANT: Include a subtle glitch or "wrongness" - something that hints this world isn't quite real:
+- Colors that shouldn't exist (the sky is the wrong shade, shadows fall incorrectly)
+- Impossible geometry (stairs that loop, rooms larger inside than outside)
+- Repeating patterns (the same bird flies by every 3 seconds)
+- Sensory anomalies (you can taste colors, sounds have texture)
+- Deja vu moments (you've done this exact thing before)
+
+Do NOT use meta-language like "simulation", "program", "glitch" or "corrupted" in the scenario
+itself - describe it as if the player is experiencing it directly and naturally.
+
+Write in second person present tense ("You are standing...", "You find yourself...")
+
+Example: "You're in a hospital corridor that stretches infinitely in both directions. The fluorescent
+lights flicker in a pattern that feels almost like breathing. Something wet is dragging itself
+toward you from both ends."
+
+Generate ONLY the scenario text, nothing else:"""
+
     try:
+        print(f"SCENARIO GEN: Calling LLM for round {round_num}...", flush=True)
         completion = client.chat.completions.create(
-            model="moonshotai/kimi-k2-0905", 
+            model="moonshotai/kimi-k2-0905",
             messages=[{"role": "user", "content": prompt}],
         )
-        return completion.choices[0].message.content.strip()
+        result = completion.choices[0].message.content.strip()
+        print(f"SCENARIO GEN: Success - {result[:50]}...", flush=True)
+        return result
     except Exception as e:
-        print(f"LLM Error: {e}")
-        return "You are trapped in a void. (AI Error)"
+        import traceback
+        print(f"SCENARIO GEN Error: {type(e).__name__}: {e}", flush=True)
+        print(f"SCENARIO GEN Traceback: {traceback.format_exc()}", flush=True)
+        return "ERROR: SCENARIO DATA CORRUPTED. You are suspended in static. Something moves in the noise."
 
 async def judge_strategy_llm_async(scenario: str, strategy: str):
-    """Async version of judge_strategy_llm for parallel execution."""
+    """Async version of judge_strategy_llm for parallel execution with simulation flavor."""
     import re
     import httpx
 
-    prompt = f"""Scenario: {scenario}
-Player Strategy: {strategy}
+    prompt = f"""You are a malfunctioning AI simulation evaluating survival strategies.
 
-Did the player survive? You must respond with ONLY a JSON object, no markdown or extra text.
-Format: {{"survived": true/false, "reason": "short explanation", "visual_prompt": "description of the scene for generating an image"}}"""
+ENVIRONMENT LOADED: {scenario}
+
+USER SURVIVAL PROTOCOL: {strategy}
+
+Evaluate if this strategy allows the user to maintain data integrity (survive this level).
+Be harsh but fair - clever and creative strategies should work, lazy or generic ones should fail.
+
+If they FAIL (survived=false): Describe their "termination" - how the environment deleted them.
+Use subtle digital/glitch undertones in death descriptions (fragmented, dissolved, corrupted, erased, etc.)
+
+If they SURVIVE (survived=true): Describe how they escaped or overcame the threat.
+
+For the visual_prompt: Describe the scene dramatically for image generation. Include the outcome
+(death scene or survival scene) with vivid details matching the scenario's aesthetic.
+
+You must respond with ONLY a JSON object, no markdown or extra text.
+Format: {{"survived": true/false, "reason": "short explanation with subtle simulation flavor", "visual_prompt": "vivid scene description for image generation"}}"""
     try:
         print(f"LLM Judge: Calling API for strategy: {strategy[:50]}...", flush=True)
         async with httpx.AsyncClient(timeout=60.0) as client:
@@ -86,7 +200,7 @@ Format: {{"survived": true/false, "reason": "short explanation", "visual_prompt"
         return content.strip()
     except Exception as e:
         print(f"LLM Judge Error: {e}", flush=True)
-        return '{"survived": false, "reason": "AI Error during judgement", "visual_prompt": "Glitchy screen"}'
+        return '{"survived": false, "reason": "SYSTEM ERROR: User data corrupted during evaluation. Terminating process.", "visual_prompt": "A figure dissolving into static and digital noise, fragments of code visible in the air"}'
 
 
 async def generate_image_fal_async(prompt: str):
@@ -113,15 +227,64 @@ async def generate_image_fal_async(prompt: str):
         return None
 
 
+async def generate_character_image_async(character_prompt: str, style_theme: str | None = None):
+    """Generate a character avatar image based on the player's description with game style."""
+    import httpx
+
+    # Pick a random style theme if not provided
+    if not style_theme:
+        style_theme = random.choice(IMAGE_STYLE_THEMES)
+
+    # Enhance prompt for character portrait with game style theme
+    base_prompt = f"Character portrait, upper body shot: {character_prompt}. Ready for survival adventure."
+    full_prompt = apply_style_theme(base_prompt, style_theme)
+
+    print(f"CHARACTER IMG: Generating with style: {style_theme[:40]}...", flush=True)
+
+    url = "https://fal.run/fal-ai/flux/krea"
+    headers = {
+        "Authorization": f"Key {os.environ['FAL_KEY']}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "prompt": full_prompt,
+        "image_size": "square",  # Square for avatars
+        "num_inference_steps": 28
+    }
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            response = await client.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+            return response.json()["images"][0]["url"]
+    except Exception as e:
+        print(f"Character Image Error: {e}", flush=True)
+        return None
+
+
 # Keep sync versions for backwards compatibility
 def judge_strategy_llm(scenario: str, strategy: str):
+    """Sync version of judgement with simulation flavor."""
     import re
     client = get_llm_client()
-    prompt = f"""Scenario: {scenario}
-Player Strategy: {strategy}
+    prompt = f"""You are a malfunctioning AI simulation evaluating survival strategies.
 
-Did the player survive? You must respond with ONLY a JSON object, no markdown or extra text.
-Format: {{"survived": true/false, "reason": "short explanation", "visual_prompt": "description of the scene for generating an image"}}"""
+ENVIRONMENT LOADED: {scenario}
+
+USER SURVIVAL PROTOCOL: {strategy}
+
+Evaluate if this strategy allows the user to maintain data integrity (survive this level).
+Be harsh but fair - clever and creative strategies should work, lazy or generic ones should fail.
+
+If they FAIL (survived=false): Describe their "termination" - how the environment deleted them.
+Use subtle digital/glitch undertones in death descriptions (fragmented, dissolved, corrupted, erased, etc.)
+
+If they SURVIVE (survived=true): Describe how they escaped or overcame the threat.
+
+For the visual_prompt: Describe the scene dramatically for image generation. Include the outcome
+(death scene or survival scene) with vivid details matching the scenario's aesthetic.
+
+You must respond with ONLY a JSON object, no markdown or extra text.
+Format: {{"survived": true/false, "reason": "short explanation with subtle simulation flavor", "visual_prompt": "vivid scene description for image generation"}}"""
     try:
         print(f"LLM Judge: Calling API for strategy: {strategy[:50]}...", flush=True)
         completion = client.chat.completions.create(
@@ -144,7 +307,91 @@ Format: {{"survived": true/false, "reason": "short explanation", "visual_prompt"
         return content.strip()
     except Exception as e:
         print(f"LLM Judge Error: {e}", flush=True)
-        return '{"survived": false, "reason": "AI Error during judgement", "visual_prompt": "Glitchy screen"}'
+        return '{"survived": false, "reason": "SYSTEM ERROR: User data corrupted during evaluation. Terminating process.", "visual_prompt": "A figure dissolving into static and digital noise, fragments of code visible in the air"}'
+
+
+async def generate_video_prompt_llm_async(player_name: str, rank: int, total_players: int, score: int, video_theme: str):
+    """Use a fast LLM to generate personalized video scene and dialogue with simulation narrative."""
+    import httpx
+    import json
+    import re
+
+    is_winner = rank == 1
+    is_last = rank == total_players
+
+    # Simulation-flavored context
+    if is_winner:
+        context = f"{player_name} has completed the EXIT PROTOCOL! They escaped the corrupted simulation with {score} data integrity points. Their consciousness has been successfully extracted."
+        tone = "triumphant, epic, with subtle digital/simulation undertones"
+    elif is_last:
+        context = f"{player_name}'s data was nearly corrupted beyond recovery. They finished last with {score} points but their consciousness fragment was salvaged."
+        tone = "consoling but humorous, gentle roasting, with simulation flavor"
+    else:
+        context = f"{player_name} achieved partial extraction, finishing in position {rank} out of {total_players} with {score} integrity points."
+        tone = "acknowledging, mildly congratulatory, with digital undertones"
+
+    prompt = f"""You are writing a very short video script for a game called "Death by AI".
+The game's premise: Players were consciousness fragments trapped in a corrupted AI simulation.
+They've now escaped (or been extracted) after surviving deadly levels.
+
+The video theme/setting is: {video_theme}
+
+Context: {context}
+
+Generate a JSON response with:
+1. "scene": A 1-sentence visual description of what's happening (must fit the theme: {video_theme})
+2. "dialogue": A short spoken announcement (2-3 sentences max, must include the player's name "{player_name}")
+
+The tone should be: {tone}
+Include subtle references to escaping, data integrity, or consciousness extraction where appropriate.
+
+Respond with ONLY valid JSON, no markdown:
+{{"scene": "...", "dialogue": "..."}}"""
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {os.environ['MOONSHOT_API_KEY']}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "mistralai/mistral-small-3.1-24b-instruct",
+                    "messages": [{"role": "user", "content": prompt}]
+                }
+            )
+            response.raise_for_status()
+            data = response.json()
+            content = data["choices"][0]["message"]["content"]
+
+            # Extract JSON
+            json_match = re.search(r'\{[\s\S]*\}', content)
+            if json_match:
+                result = json.loads(json_match.group(0))
+                print(f"VIDEO PROMPT LLM: Generated for {player_name}: {result}", flush=True)
+                return result
+
+    except Exception as e:
+        print(f"VIDEO PROMPT LLM Error for {player_name}: {e}", flush=True)
+
+    # Fallback with simulation flavor
+    if is_winner:
+        return {
+            "scene": f"A figure emerges from a portal of light and code, reality stabilizing around them as they escape the simulation",
+            "dialogue": f"EXIT PROTOCOL COMPLETE. {player_name}, your consciousness has been successfully extracted! You are the primary survivor of the corrupted simulation!"
+        }
+    elif is_last:
+        return {
+            "scene": f"A flickering, partially corrupted figure stumbles out of static, barely holding together",
+            "dialogue": f"Data salvage complete. {player_name}, your consciousness fragment has been recovered... mostly. Some memories may be corrupted."
+        }
+    else:
+        return {
+            "scene": f"A figure materializes from digital noise, their form stabilizing as they emerge from the simulation",
+            "dialogue": f"Extraction complete. {player_name}, you finished in position {rank}. Your data integrity held. Not optimal, but you survived."
+        }
+
 
 def generate_image_fal(prompt: str):
     import requests
@@ -167,6 +414,86 @@ def generate_image_fal(prompt: str):
         return None
 
 
+async def submit_video_request_async(player_name: str, image_url: str, scene: str, dialogue: str, video_theme: str, client: "httpx.AsyncClient"):
+    """Submit a video generation request and return the request_id (don't wait for completion)."""
+    submit_url = "https://queue.fal.run/fal-ai/kling-video/v2.6/pro/image-to-video"
+    headers = {
+        "Authorization": f"Key {os.environ['FAL_KEY']}",
+        "Content-Type": "application/json"
+    }
+
+    # Create prompt with LLM-generated scene and dialogue, plus hardcoded theme
+    prompt = f'{scene} An announcer says "{dialogue}" Setting: {video_theme}'
+
+    payload = {
+        "prompt": prompt,
+        "image_url": image_url,
+        "duration": "10",  # 10 second videos
+        "generate_audio": True,
+        "negative_prompt": "blur, distort, low quality, static, boring"
+    }
+
+    try:
+        print(f"VIDEO SUBMIT [{player_name}]: Submitting request...", flush=True)
+        response = await client.post(submit_url, json=payload, headers=headers)
+        response.raise_for_status()
+        queue_data = response.json()
+        request_id = queue_data.get("request_id")
+
+        if request_id:
+            print(f"VIDEO SUBMIT [{player_name}]: Got request_id: {request_id}", flush=True)
+        else:
+            print(f"VIDEO SUBMIT [{player_name}]: No request_id in response: {queue_data}", flush=True)
+
+        return request_id
+    except Exception as e:
+        print(f"VIDEO SUBMIT Error [{player_name}]: {e}", flush=True)
+        return None
+
+
+async def poll_video_status_async(player_name: str, request_id: str, client: "httpx.AsyncClient"):
+    """Poll for video completion given a request_id."""
+    import asyncio
+
+    if not request_id:
+        return None
+
+    status_url = f"https://queue.fal.run/fal-ai/kling-video/v2.6/pro/image-to-video/requests/{request_id}/status"
+    result_url = f"https://queue.fal.run/fal-ai/kling-video/v2.6/pro/image-to-video/requests/{request_id}"
+    headers = {
+        "Authorization": f"Key {os.environ['FAL_KEY']}",
+        "Content-Type": "application/json"
+    }
+
+    max_attempts = 90  # 7.5 minutes max (5 second intervals)
+    for attempt in range(max_attempts):
+        await asyncio.sleep(5)
+
+        try:
+            status_response = await client.get(status_url, headers=headers)
+            status_data = status_response.json()
+            status = status_data.get("status")
+
+            if attempt % 6 == 0:  # Log every 30 seconds
+                print(f"VIDEO POLL [{player_name}]: Attempt {attempt+1}/{max_attempts}, status: {status}", flush=True)
+
+            if status == "COMPLETED":
+                result_response = await client.get(result_url, headers=headers)
+                result_data = result_response.json()
+                video_url = result_data.get("video", {}).get("url")
+                print(f"VIDEO POLL [{player_name}]: Complete! URL: {video_url}", flush=True)
+                return video_url
+            elif status in ["FAILED", "CANCELLED"]:
+                print(f"VIDEO POLL [{player_name}]: Failed with status: {status}", flush=True)
+                return None
+        except Exception as e:
+            print(f"VIDEO POLL [{player_name}]: Error on attempt {attempt+1}: {e}", flush=True)
+            # Continue polling on transient errors
+
+    print(f"VIDEO POLL [{player_name}]: Timeout after max attempts", flush=True)
+    return None
+
+
 # --- State Models ---
 class Player(BaseModel):
     id: str
@@ -179,6 +506,9 @@ class Player(BaseModel):
     strategy: Optional[str] = None  # Current round strategy
     result_image_url: Optional[str] = None # Image of death or glory
     last_active: float = Field(default_factory=time.time) # Heartbeat
+    # Character creation fields
+    character_description: Optional[str] = None  # Combined prompt for image gen
+    character_image_url: Optional[str] = None  # Generated character avatar
 
 class Round(BaseModel):
     number: int
@@ -187,6 +517,10 @@ class Round(BaseModel):
     scenario_image_url: Optional[str] = None
     status: Literal["scenario", "strategy", "judgement", "results", "trap_creation", "trap_voting", "coop_voting", "coop_judgement"] = "scenario"
     architect_id: Optional[str] = None # For blind architect
+    style_theme: Optional[str] = None  # Visual style theme for all images in this round
+
+    # Narrative system message for this level (displayed in UI)
+    system_message: Optional[str] = None
 
     # Blind Architect specific
     trap_proposals: Dict[str, str] = {} # player_id -> trap description
@@ -215,6 +549,11 @@ class GameState(BaseModel):
     round_config: List[str] = Field(default_factory=lambda: [
         "survival", "survival", "cooperative", "survival", "blind_architect"
     ])
+    # End game video fields - videos for ALL players
+    player_videos: Dict[str, str] = {}  # player_id -> video URL
+    videos_status: Literal["pending", "generating", "ready", "failed"] = "pending"
+    video_theme: Optional[str] = None  # Consistent theme for all videos
+    winner_id: Optional[str] = None
 
 # --- Persistent Storage ---
 # We use a Dict to store game states. Key=GameCode
@@ -257,16 +596,28 @@ async def api_join_game(request: Request):
     code = request.query_params.get("code")
     data = await request.json()
     player_name = data.get("name", "Unknown Player")
+    character_description = data.get("character_description")
     game = get_game(code)
-    
+
     if not game: raise HTTPException(status_code=404, detail="Game not found")
     if game.status != "lobby": raise HTTPException(status_code=400, detail="Game started")
-    
+
     player_id = str(uuid.uuid4())
     is_first = len(game.players) == 0
-    player = Player(id=player_id, name=player_name, is_admin=is_first)
+    player = Player(
+        id=player_id,
+        name=player_name,
+        is_admin=is_first,
+        character_description=character_description
+    )
     game.players[player_id] = player
     save_game(game)
+
+    # Spawn async character image generation if description provided
+    if character_description:
+        print(f"API: Spawning character image generation for {player_name}", flush=True)
+        generate_character_image.spawn(code, player_id, character_description)
+
     return {"player_id": player_id, "is_admin": is_first}
 
 @web_app.get("/api/get_game_state")
@@ -293,21 +644,40 @@ async def api_get_game_state(request: Request):
         
     return game.model_dump()
 
+def get_system_message(round_num: int, max_rounds: int, round_type: str) -> str:
+    """Generate the system message for a given round based on narrative progression."""
+    if round_type == "blind_architect":
+        return "SECURITY BREACH DETECTED // ARCHITECT PROTOCOL ACTIVATED"
+    elif round_type == "cooperative":
+        return "CRITICAL ERROR // COLLABORATIVE SUBROUTINE REQUIRED"
+
+    # Standard survival rounds - progression-based messages
+    if round_num == 1:
+        return "SYSTEM BOOT // LEVEL 1 INITIALIZED"
+    elif round_num == 2:
+        return "CALIBRATION MODE // ANOMALIES DETECTED"
+    elif round_num == max_rounds:
+        return "EXIT PROTOCOL // FINAL LEVEL"
+    else:
+        corruption_pct = min(90, 50 + (round_num * 10))
+        return f"WARNING: CORRUPTION AT {corruption_pct}% // REALITY UNSTABLE"
+
+
 @web_app.post("/api/start_game")
 async def api_start_game(request: Request):
     print("API: Start Game Called")
     code = request.query_params.get("code")
     # Quick check first
     game = get_game(code)
-    if not game: 
+    if not game:
         print("API: Game not found")
         raise HTTPException(status_code=404, detail="Game not found")
-    
+
     print("API: Generating Scenario...")
-    # Generate scenario first (slow operation)
-    scenario_text = generate_scenario_llm(1)
+    # Generate scenario first (slow operation) with max_rounds context
+    scenario_text = generate_scenario_llm(1, game.max_rounds)
     print(f"API: Scenario Generated: {scenario_text}")
-    
+
     # Re-fetch game state to avoid overwriting updates (heartbeats) that happened during generation
     game = get_game(code)
     if not game: raise HTTPException(status_code=404, detail="Game disappeared")
@@ -321,6 +691,8 @@ async def api_start_game(request: Request):
     first_round = Round(number=1, type=first_round_type)
     first_round.scenario_text = scenario_text
     first_round.status = "strategy"  # Both survival and cooperative start with strategy
+    first_round.style_theme = random.choice(IMAGE_STYLE_THEMES)
+    first_round.system_message = get_system_message(1, game.max_rounds, first_round_type)
     game.rounds.append(first_round)
 
     save_game(game)
@@ -375,13 +747,33 @@ def generate_result_image_sync(game_code: str, player_id: str, prompt: str):
             game.players[player_id].result_image_url = url
             save_game(game)
 
+
+@app.function(image=image, secrets=secrets)
+def generate_character_image(game_code: str, player_id: str, character_prompt: str):
+    """Generate character avatar and update player state."""
+    import asyncio
+
+    async def do_generation():
+        print(f"CHARACTER IMG: Generating for player {player_id}...", flush=True)
+        url = await generate_character_image_async(character_prompt)
+        if url:
+            game = get_game(game_code)
+            if game and player_id in game.players:
+                game.players[player_id].character_image_url = url
+                save_game(game)
+                print(f"CHARACTER IMG: Saved image for {player_id}", flush=True)
+        else:
+            print(f"CHARACTER IMG: Failed to generate for {player_id}", flush=True)
+
+    asyncio.run(do_generation())
+
 @app.function(image=image, secrets=secrets)
 def run_round_judgement(game_code: str):
     """Run judgement for all players in parallel using asyncio."""
     import json
     import asyncio
 
-    async def judge_and_generate(pid: str, player_name: str, strategy: str, scenario: str):
+    async def judge_and_generate(pid: str, player_name: str, strategy: str, scenario: str, style_theme: str | None):
         """Judge a single player and generate their result image."""
         try:
             # Judge the strategy
@@ -392,8 +784,9 @@ def run_round_judgement(game_code: str):
             reason = res.get("reason", "Unknown")
             vis_prompt = res.get("visual_prompt", "A generic scene.")
 
-            # Generate image (in parallel with other players)
-            image_url = await generate_image_fal_async(vis_prompt)
+            # Generate image with round's style theme
+            themed_prompt = apply_style_theme(vis_prompt, style_theme)
+            image_url = await generate_image_fal_async(themed_prompt)
 
             return {
                 "pid": pid,
@@ -427,7 +820,7 @@ def run_round_judgement(game_code: str):
         for pid, p in game.players.items():
             print(f"JUDGEMENT: Player {p.name} (alive={p.is_alive}, strategy={bool(p.strategy)})", flush=True)
             if p.strategy and p.is_alive:
-                tasks.append(judge_and_generate(pid, p.name, p.strategy, current_round.scenario_text))
+                tasks.append(judge_and_generate(pid, p.name, p.strategy, current_round.scenario_text, current_round.style_theme))
                 player_info.append((pid, p.name))
 
         if tasks:
@@ -465,6 +858,191 @@ def run_round_judgement(game_code: str):
 generate_result_image_async = generate_result_image_sync
 
 
+@app.function(image=image, secrets=secrets, timeout=900)  # 15 min timeout for multiple videos
+def generate_all_player_videos(game_code: str):
+    """Generate personalized 10-second videos for ALL players using parallel phases."""
+    import asyncio
+    import httpx
+
+    async def do_all_video_generation():
+        game = get_game(game_code)
+        if not game:
+            print(f"VIDEO GEN: Game {game_code} not found!", flush=True)
+            return
+
+        # Sort players by score
+        sorted_players = sorted(game.players.values(), key=lambda p: p.score, reverse=True)
+        if not sorted_players:
+            print("VIDEO GEN: No players found!", flush=True)
+            return
+
+        total_players = len(sorted_players)
+        winner = sorted_players[0]
+
+        # Select a random video theme for consistency across all videos
+        video_theme = random.choice(VIDEO_STYLE_THEMES)
+
+        game.winner_id = winner.id
+        game.videos_status = "generating"
+        game.video_theme = video_theme
+        save_game(game)
+
+        print(f"VIDEO GEN: Starting PARALLEL generation for {total_players} players", flush=True)
+        print(f"VIDEO GEN: Theme: {video_theme}", flush=True)
+
+        # ============================================================
+        # PHASE 1: Generate ALL LLM prompts in parallel
+        # ============================================================
+        print(f"VIDEO GEN PHASE 1: Generating {total_players} LLM prompts in parallel...", flush=True)
+
+        llm_tasks = []
+        for rank, player in enumerate(sorted_players, start=1):
+            llm_tasks.append(generate_video_prompt_llm_async(
+                player.name, rank, total_players, player.score, video_theme
+            ))
+
+        llm_results = await asyncio.gather(*llm_tasks, return_exceptions=True)
+
+        # Process LLM results
+        player_prompts = {}  # player_id -> {"scene": ..., "dialogue": ...}
+        for idx, (player, result) in enumerate(zip(sorted_players, llm_results)):
+            if isinstance(result, Exception):
+                print(f"VIDEO GEN PHASE 1: LLM error for {player.name}: {result}", flush=True)
+                player_prompts[player.id] = {
+                    "scene": "A ceremony scene with spotlights",
+                    "dialogue": f"Congratulations to {player.name}!"
+                }
+            else:
+                player_prompts[player.id] = result
+
+        print(f"VIDEO GEN PHASE 1: Complete - {len(player_prompts)} prompts generated", flush=True)
+
+        # ============================================================
+        # PHASE 2: Generate ALL base images in parallel
+        # ============================================================
+        print(f"VIDEO GEN PHASE 2: Generating {total_players} images in parallel...", flush=True)
+
+        image_tasks = []
+        for player in sorted_players:
+            prompt_data = player_prompts[player.id]
+            scene = prompt_data.get("scene", "A ceremony scene")
+            image_prompt = f"{scene}. Setting: {video_theme}. Cinematic, dramatic lighting, vivid colors."
+            image_tasks.append(generate_image_fal_async(image_prompt))
+
+        image_results = await asyncio.gather(*image_tasks, return_exceptions=True)
+
+        # Process image results
+        player_images = {}  # player_id -> image_url
+        for player, result in zip(sorted_players, image_results):
+            if isinstance(result, Exception) or result is None:
+                print(f"VIDEO GEN PHASE 2: Image failed for {player.name}", flush=True)
+            else:
+                player_images[player.id] = result
+                print(f"VIDEO GEN PHASE 2: Image ready for {player.name}", flush=True)
+
+        print(f"VIDEO GEN PHASE 2: Complete - {len(player_images)}/{total_players} images generated", flush=True)
+
+        if not player_images:
+            print("VIDEO GEN: All image generations failed, aborting", flush=True)
+            game = get_game(game_code)
+            if game:
+                game.videos_status = "failed"
+                save_game(game)
+            return
+
+        # ============================================================
+        # PHASE 3: Submit ALL video requests in parallel (don't wait)
+        # ============================================================
+        print(f"VIDEO GEN PHASE 3: Submitting {len(player_images)} video requests in parallel...", flush=True)
+
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            submit_tasks = []
+            players_to_submit = []
+
+            for player in sorted_players:
+                if player.id not in player_images:
+                    continue
+                prompt_data = player_prompts[player.id]
+                scene = prompt_data.get("scene", "A ceremony scene")
+                dialogue = prompt_data.get("dialogue", f"Well done, {player.name}!")
+                image_url = player_images[player.id]
+
+                submit_tasks.append(submit_video_request_async(
+                    player.name, image_url, scene, dialogue, video_theme, client
+                ))
+                players_to_submit.append(player)
+
+            submit_results = await asyncio.gather(*submit_tasks, return_exceptions=True)
+
+            # Collect request IDs
+            player_request_ids = {}  # player_id -> request_id
+            for player, result in zip(players_to_submit, submit_results):
+                if isinstance(result, Exception) or result is None:
+                    print(f"VIDEO GEN PHASE 3: Submit failed for {player.name}", flush=True)
+                else:
+                    player_request_ids[player.id] = result
+
+            print(f"VIDEO GEN PHASE 3: Complete - {len(player_request_ids)}/{len(players_to_submit)} requests submitted", flush=True)
+
+            if not player_request_ids:
+                print("VIDEO GEN: All video submissions failed, aborting", flush=True)
+                game = get_game(game_code)
+                if game:
+                    game.videos_status = "failed"
+                    save_game(game)
+                return
+
+            # ============================================================
+            # PHASE 4: Poll ALL video statuses in parallel
+            # ============================================================
+            print(f"VIDEO GEN PHASE 4: Polling {len(player_request_ids)} videos in parallel...", flush=True)
+
+            poll_tasks = []
+            players_to_poll = []
+
+            for player in sorted_players:
+                if player.id not in player_request_ids:
+                    continue
+                request_id = player_request_ids[player.id]
+                poll_tasks.append(poll_video_status_async(player.name, request_id, client))
+                players_to_poll.append(player)
+
+            poll_results = await asyncio.gather(*poll_tasks, return_exceptions=True)
+
+            # Collect video URLs
+            player_videos = {}  # player_id -> video_url
+            for player, result in zip(players_to_poll, poll_results):
+                if isinstance(result, Exception) or result is None:
+                    print(f"VIDEO GEN PHASE 4: Video failed for {player.name}", flush=True)
+                else:
+                    player_videos[player.id] = result
+
+            print(f"VIDEO GEN PHASE 4: Complete - {len(player_videos)}/{len(players_to_poll)} videos ready", flush=True)
+
+        # ============================================================
+        # Save results to game state
+        # ============================================================
+        game = get_game(game_code)
+        if game:
+            for player_id, video_url in player_videos.items():
+                game.player_videos[player_id] = video_url
+
+            if player_videos:
+                game.videos_status = "ready"
+                print(f"VIDEO GEN: SUCCESS! {len(player_videos)}/{total_players} videos saved", flush=True)
+            else:
+                game.videos_status = "failed"
+                print("VIDEO GEN: All video generations failed", flush=True)
+
+            save_game(game)
+
+    asyncio.run(do_all_video_generation())
+
+
+# Keep old function name as alias for backwards compatibility
+generate_winner_video = generate_all_player_videos
+
+
 # --- Cooperative Round Functions ---
 
 @app.function(image=image, secrets=secrets)
@@ -486,8 +1064,9 @@ def generate_coop_strategy_images(game_code: str):
         player_ids = []
         for pid, player in game.players.items():
             if player.is_alive and player.strategy:
-                prompt = f"Survival strategy illustration: {player.strategy[:200]}. Dramatic scene, cinematic lighting, vivid colors."
-                tasks.append(generate_image_fal_async(prompt))
+                base_prompt = f"Survival strategy illustration: {player.strategy[:200]}. Dramatic scene, cinematic lighting, vivid colors."
+                themed_prompt = apply_style_theme(base_prompt, current_round.style_theme)
+                tasks.append(generate_image_fal_async(themed_prompt))
                 player_ids.append(pid)
 
         if tasks:
@@ -615,9 +1194,10 @@ def run_coop_judgement(game_code: str):
                     p.score -= 100
                 print(f"COOP JUDGE: FAILED! All {len(alive_players)} players lose -100 each", flush=True)
 
-            # Generate team result image
+            # Generate team result image with round's style theme
             vis_prompt = res.get("visual_prompt", "Team survival scene")
-            image_url = await generate_image_fal_async(vis_prompt)
+            themed_prompt = apply_style_theme(vis_prompt, current_round.style_theme)
+            image_url = await generate_image_fal_async(themed_prompt)
             if image_url:
                 current_round.scenario_image_url = image_url  # Reuse for team result display
 
@@ -733,8 +1313,10 @@ async def api_submit_trap(request: Request):
 
     current_round = game.rounds[game.current_round_idx]
     current_round.trap_proposals[player_id] = trap_text
-    
-    img_url = generate_image_fal(trap_text)
+
+    # Generate trap image with round's style theme
+    themed_prompt = apply_style_theme(trap_text, current_round.style_theme)
+    img_url = generate_image_fal(themed_prompt)
     if img_url: current_round.trap_images[player_id] = img_url
         
     alive_players = [p for p in game.players.values() if p.is_alive]
@@ -825,7 +1407,15 @@ async def api_next_round(request: Request):
     next_idx = game.current_round_idx + 1
     if next_idx >= game.max_rounds:
         game.status = "finished"
+        # Find winner and set initial video status
+        sorted_players = sorted(game.players.values(), key=lambda p: p.score, reverse=True)
+        if sorted_players:
+            game.winner_id = sorted_players[0].id
+            game.videos_status = "generating"
         save_game(game)
+        # Spawn async video generation for ALL players
+        print(f"API: Game finished, spawning video generation for all players in {code}", flush=True)
+        generate_all_player_videos.spawn(code)
         return {"status": "finished"}
 
     game.current_round_idx = next_idx
@@ -838,6 +1428,8 @@ async def api_next_round(request: Request):
         round_type = "blind_architect" if (next_idx + 1) == game.max_rounds else "survival"
 
     new_round = Round(number=next_idx + 1, type=round_type)
+    new_round.style_theme = random.choice(IMAGE_STYLE_THEMES)
+    new_round.system_message = get_system_message(next_idx + 1, game.max_rounds, round_type)
     game.rounds.append(new_round)
 
     # Resurrect all players for the new round (Points matter, death is temporary)
@@ -850,14 +1442,68 @@ async def api_next_round(request: Request):
 
     if round_type == "blind_architect":
         new_round.status = "trap_creation"
-        new_round.scenario_text = "DESIGN A TRAP"
+        new_round.scenario_text = "ARCHITECT MODE: Design a deadly scenario for your opponents."
     else:
         # Both survival and cooperative start with strategy phase
         new_round.status = "strategy"
-        new_round.scenario_text = generate_scenario_llm(next_idx + 1)
+        new_round.scenario_text = generate_scenario_llm(next_idx + 1, game.max_rounds)
 
     save_game(game)
     return {"status": "started_round", "round": next_idx + 1, "type": round_type}
+
+@web_app.post("/api/retry_player_videos")
+async def api_retry_player_videos(request: Request):
+    """Retry generating player videos if they failed."""
+    code = request.query_params.get("code")
+    game = get_game(code)
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    if game.status != "finished":
+        raise HTTPException(status_code=400, detail="Game not finished")
+
+    if game.videos_status == "generating":
+        return {"status": "already_generating"}
+
+    # Reset status and spawn new generation
+    game.videos_status = "generating"
+    game.player_videos = {}  # Clear any partial results
+    save_game(game)
+    print(f"API: Retrying player video generation for {code}", flush=True)
+    generate_all_player_videos.spawn(code)
+    return {"status": "retry_started"}
+
+
+@web_app.post("/api/regenerate_character_image")
+async def api_regenerate_character_image(request: Request):
+    """Regenerate a player's character avatar with a new random style."""
+    code = request.query_params.get("code")
+    data = await request.json()
+    player_id = data.get("player_id")
+
+    game = get_game(code)
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    if game.status != "lobby":
+        raise HTTPException(status_code=400, detail="Can only regenerate in lobby")
+
+    if player_id not in game.players:
+        raise HTTPException(status_code=404, detail="Player not found")
+
+    player = game.players[player_id]
+    if not player.character_description:
+        raise HTTPException(status_code=400, detail="No character description to regenerate from")
+
+    # Clear current image and spawn new generation
+    player.character_image_url = None
+    save_game(game)
+
+    print(f"API: Regenerating character image for {player.name}", flush=True)
+    generate_character_image.spawn(code, player_id, player.character_description)
+
+    return {"status": "regenerating"}
+
 
 # Mount static files (Frontend)
 # We expect 'frontend/dist' to be available. We need to Mount it in the App definition.

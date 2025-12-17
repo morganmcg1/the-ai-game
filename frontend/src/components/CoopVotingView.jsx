@@ -31,9 +31,9 @@ export function CoopVotingView({ round, playerId, onVote, players }) {
     if (entries.length === 0) {
         return (
             <div className="card" style={{ textAlign: 'center' }}>
-                <h2 className="glitch-text">VISUALIZING STRATEGIES...</h2>
-                <p style={{ color: 'var(--secondary)', marginBottom: '2rem' }}>
-                    The AI is creating images for each strategy.
+                <h2 className="glitch-text">RENDERING PROTOCOLS...</h2>
+                <p style={{ color: 'var(--secondary)', marginBottom: '2rem', fontFamily: 'monospace' }}>
+                    &gt; Generating visual representations of user protocols...
                 </p>
                 <span className="loader"></span>
             </div>
@@ -42,11 +42,11 @@ export function CoopVotingView({ round, playerId, onVote, players }) {
 
     return (
         <div style={{ width: '100%', maxWidth: '1000px' }}>
-            <h1 style={{ textAlign: 'center', marginBottom: '1rem', color: 'var(--secondary)' }}>
-                COOPERATIVE VOTE
+            <h1 style={{ textAlign: 'center', marginBottom: '1rem', color: 'var(--secondary)', fontFamily: 'monospace' }}>
+                SYNC PROTOCOL SELECTION
             </h1>
-            <p style={{ textAlign: 'center', marginBottom: '2rem', color: '#ccc' }}>
-                Which strategy looks most likely to succeed? Points are at stake!
+            <p style={{ textAlign: 'center', marginBottom: '2rem', color: '#ccc', fontFamily: 'monospace' }}>
+                &gt; Select the protocol most likely to preserve team integrity. Data points at stake.
             </p>
 
             <div style={{
@@ -107,8 +107,8 @@ export function CoopVotingView({ round, playerId, onVote, players }) {
 
             <div style={{ textAlign: 'center', marginTop: '2rem' }}>
                 {hasVoted && !hasChangedVote && (
-                    <p style={{ color: 'var(--success)', marginBottom: '1rem' }}>
-                        Vote submitted! Select a different image to change your vote.
+                    <p style={{ color: 'var(--success)', marginBottom: '1rem', fontFamily: 'monospace' }}>
+                        &gt; Selection registered. Select a different protocol to modify.
                     </p>
                 )}
                 <button
@@ -122,7 +122,7 @@ export function CoopVotingView({ round, playerId, onVote, players }) {
                         fontSize: '1.2rem'
                     }}
                 >
-                    {loading ? 'VOTING...' : hasChangedVote ? 'CHANGE VOTE' : 'CONFIRM VOTE'}
+                    {loading ? 'SYNCING...' : hasChangedVote ? 'UPDATE SELECTION' : 'CONFIRM SELECTION'}
                 </button>
             </div>
         </div>

@@ -11,14 +11,16 @@ export const api = {
         return res.json();
     },
 
-    joinGame: async (code, name) => {
+    joinGame: async (code, name, characterDescription = null) => {
+        const body = { name };
+        if (characterDescription) {
+            body.character_description = characterDescription;
+        }
         const res = await fetch(`${getUrl("join_game")}?code=${code}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: name }),
+            body: JSON.stringify(body),
         });
-        // Actually, to be safe with Modal web endpoints, passing params in URL is safest for simple arguments.
-        // Let's fix the call below.
         return res.json();
     },
 
@@ -75,6 +77,20 @@ export const api = {
 
     nextRound: async (code) => {
         const res = await fetch(`${getUrl("next_round")}?code=${code}`, { method: "POST" });
+        return res.json();
+    },
+
+    retryPlayerVideos: async (code) => {
+        const res = await fetch(`${getUrl("retry_player_videos")}?code=${code}`, { method: "POST" });
+        return res.json();
+    },
+
+    regenerateCharacterImage: async (code, playerId) => {
+        const res = await fetch(`${getUrl("regenerate_character_image")}?code=${code}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ player_id: playerId }),
+        });
         return res.json();
     }
 };

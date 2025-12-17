@@ -25,8 +25,8 @@ export function VotingView({ round, playerId, onVote }) {
     if (round.votes && round.votes[playerId]) {
         return (
             <div className="card" style={{ textAlign: 'center' }}>
-                <h2>VOTE CAST</h2>
-                <p>Waiting for the consensus...</p>
+                <h2 style={{ fontFamily: 'monospace', color: 'var(--accent)' }}>SELECTION REGISTERED</h2>
+                <p style={{ fontFamily: 'monospace', color: '#0f0' }}>&gt; Awaiting other user inputs...</p>
                 <span className="loader"></span>
             </div>
         );
@@ -36,8 +36,12 @@ export function VotingView({ round, playerId, onVote }) {
 
     return (
         <div style={{ width: '100%', maxWidth: '1000px' }}>
-            <h1 style={{ textAlign: 'center', marginBottom: '2rem' }}>CHOOSE YOUR DOOM</h1>
-            <p style={{ textAlign: 'center', marginBottom: '2rem' }}>Vote for the most interesting trap.</p>
+            <h1 style={{ textAlign: 'center', marginBottom: '2rem', fontFamily: 'monospace', color: 'var(--accent)' }}>
+                SELECT NEXT ENVIRONMENT
+            </h1>
+            <p style={{ textAlign: 'center', marginBottom: '2rem', fontFamily: 'monospace', color: '#ccc' }}>
+                &gt; Choose which architect's environment will be loaded next.
+            </p>
 
             <div style={{
                 display: 'grid',
@@ -74,7 +78,7 @@ export function VotingView({ round, playerId, onVote }) {
                     disabled={!selectedId || loading}
                     style={{ backgroundColor: 'var(--accent)', color: 'black', padding: '16px 32px', fontSize: '1.2rem' }}
                 >
-                    {loading ? 'VOTING...' : 'CONFIRM VOTE'}
+                    {loading ? 'LOADING ENVIRONMENT...' : 'LOAD ENVIRONMENT'}
                 </button>
             </div>
         </div>

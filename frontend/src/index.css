@@ -315,3 +315,56 @@ input:focus {
     0 0 15px var(--primary);
   line-height: 1;
 }
+
+/* Simulation System UI Styles */
+@keyframes flicker {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
+  92% { opacity: 0.9; }
+  94% { opacity: 0.3; }
+  96% { opacity: 1; }
+  98% { opacity: 0.7; }
+}
+
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+.system-header {
+  font-family: 'Courier New', monospace;
+  position: relative;
+}
+
+.system-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    transparent 50%,
+    rgba(0, 255, 0, 0.03) 50%
+  );
+  background-size: 100% 4px;
+  pointer-events: none;
+}
+
+/* Terminal-style text */
+.terminal-text {
+  font-family: 'Courier New', monospace;
+  color: #0f0;
+  text-shadow: 0 0 5px #0f0;
+}
+
+/* Data corruption visual effect */
+.corruption-warning {
+  animation: flicker 2s infinite;
+}
+
+/* Glitch effect enhancement for system errors */
+.system-error {
+  color: #f00;
+  animation: glitch 0.5s infinite, flicker 1s infinite;
+}

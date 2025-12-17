@@ -29,14 +29,14 @@ export function InputView({ round, playerId, onSubmit }) {
 
     return (
         <div className="card input-card">
-            <h3>YOUR STRATEGY</h3>
-            <p className="hint-text">How do you survive this scenario? Be creative...</p>
+            <h3 style={{ fontFamily: 'monospace', color: 'var(--secondary)' }}>SURVIVAL PROTOCOL</h3>
+            <p className="hint-text" style={{ fontFamily: 'monospace' }}>&gt; Input your survival strategy. Be creative to maintain data integrity...</p>
             <div className="input-wrapper">
                 <textarea
                     value={strategy}
                     onChange={(e) => setStrategy(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder="I would use the..."
+                    placeholder="I would..."
                     disabled={isSubmitting}
                     autoFocus
                     data-testid="strategy-input"
@@ -50,11 +50,11 @@ export function InputView({ round, playerId, onSubmit }) {
             >
                 {isSubmitting ? (
                     <>
-                        <span className="spinner"></span> TRANSMITTING...
+                        <span className="spinner"></span> UPLOADING PROTOCOL...
                     </>
                 ) : (
                     <>
-                        TRANSMIT STRATEGY <span className="shortcut-hint">[⌘↵]</span>
+                        SUBMIT PROTOCOL <span className="shortcut-hint">[⌘↵]</span>
                     </>
                 )}
             </button>

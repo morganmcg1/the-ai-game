@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Skull, Heart, Trophy, Medal, Users } from 'lucide-react';
+import { Skull, Heart, Trophy, Medal, Users, Terminal } from 'lucide-react';
 
 export function ResultsView({ round, players }) {
     const sortedPlayers = Object.values(players).sort((a, b) => b.score - a.score);
@@ -16,7 +16,7 @@ export function ResultsView({ round, players }) {
     return (
         <div style={{ width: '100%', maxWidth: '800px' }}>
             <h1 className="glitch-text" style={{ textAlign: 'center', marginBottom: '2rem' }}>
-                {isCooperativeRound ? 'COOPERATION RESULTS' : 'JUDGEMENT DAY'}
+                {isCooperativeRound ? 'TEAM SYNC RESULTS' : 'PROCESSING COMPLETE'}
             </h1>
 
             {/* Cooperative Round: Team Outcome Card */}
@@ -34,7 +34,7 @@ export function ResultsView({ round, players }) {
                 >
                     <Users size={48} color={round.coop_team_survived ? 'var(--success)' : 'var(--danger)'} style={{ marginBottom: '1rem' }} />
                     <h2 style={{ color: round.coop_team_survived ? 'var(--success)' : 'var(--danger)', fontSize: '2rem', marginBottom: '1rem' }}>
-                        {round.coop_team_survived ? 'TEAM SURVIVED!' : 'TEAM FAILED!'}
+                        {round.coop_team_survived ? 'SYNC SUCCESSFUL' : 'SYNC FAILED'}
                     </h2>
 
                     {/* Show winning strategy */}
@@ -145,13 +145,13 @@ export function ResultsView({ round, players }) {
 
                             {!player.is_alive && (
                                 <div style={{ color: 'var(--danger)', fontWeight: 'bold', fontSize: '1rem', marginBottom: '0.75rem' }}>
-                                    Cause of Death: {player.death_reason || "Unknown"}
+                                    TERMINATED: {player.death_reason || "Data corrupted"}
                                 </div>
                             )}
 
                             {player.is_alive && player.survival_reason && (
                                 <div style={{ color: 'var(--success)', fontWeight: 'bold', fontSize: '1rem', marginBottom: '0.75rem' }}>
-                                    Survived: {player.survival_reason}
+                                    DATA INTACT: {player.survival_reason}
                                 </div>
                             )}
 
@@ -191,7 +191,7 @@ export function ResultsView({ round, players }) {
             >
                 <h2 style={{ textAlign: 'center', marginBottom: '1.5rem', color: 'var(--primary)' }}>
                     <Trophy size={24} style={{ verticalAlign: 'middle', marginRight: '0.5rem' }} />
-                    LEADERBOARD
+                    INTEGRITY RANKINGS
                 </h2>
                 <div className="card" style={{ width: '100%', padding: '1rem' }}>
                     {sortedPlayers.map((player, index) => {
