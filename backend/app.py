@@ -673,7 +673,7 @@ class GameState(BaseModel):
         "survival", "survival", "cooperative", "survival", "blind_architect"
     ])
     # Pre-warmed scenarios generated in parallel when game is created
-    prewarmed_scenarios: List[str] = []  # Index corresponds to round number - 1
+    prewarmed_scenarios: List[Optional[str]] = []  # Index corresponds to round number - 1, None for blind_architect
     # End game video fields - videos for ALL players
     player_videos: Dict[str, str] = {}  # player_id -> video URL
     videos_status: Literal["pending", "generating", "ready", "failed"] = "pending"
