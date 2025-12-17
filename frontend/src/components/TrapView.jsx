@@ -1,9 +1,29 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
+import { Clock } from 'lucide-react';
 
-export function TrapView({ round, playerId, onSubmit }) {
+const DEFAULT_TIMEOUT_SECONDS = 30;
+
+export function TrapView({ round, playerId, onSubmit, config = {} }) {
+    const timeoutSeconds = config.submission_timeout_seconds || DEFAULT_TIMEOUT_SECONDS;
     const [trapText, setTrapText] = useState('');
     const [loading, setLoading] = useState(false);
+    const [timeLeft, setTimeLeft] = useState(timeoutSeconds);
+
+    // Countdown timer effect
+    useEffect(() => {
+        if (!round.submission_start_time) return;
+
+        const updateTimer = () => {
+            const elapsed = (Date.now() / 1000) - round.submission_start_time;
+            const remaining = Math.max(0, timeoutSeconds - elapsed);
+            setTimeLeft(Math.ceil(remaining));
+        };
+
+        updateTimer(); // Initial update
+        const interval = setInterval(updateTimer, 100);
+        return () => clearInterval(interval);
+    }, [round.submission_start_time, timeoutSeconds]);
 
     const handleSubmit = useCallback(async () => {
         if (!trapText.trim()) return;
@@ -24,6 +44,17 @@ export function TrapView({ round, playerId, onSubmit }) {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [loading, trapText, handleSubmit]);
 
+    // Timer color based on urgency
+    const getTimerColor = () => {
+        if (timeLeft <= 5) return '#ff0000';
+        if (timeLeft <= 10) return '#ff6600';
+        if (timeLeft <= 15) return '#ffcc00';
+        return 'var(--accent)';
+    };
+
+    const timerColor = getTimerColor();
+    const isUrgent = timeLeft <= 10;
+
     if (round.trap_proposals && round.trap_proposals[playerId]) {
         return (
             <div className="card" style={{ textAlign: 'center' }}>
@@ -36,6 +67,41 @@ export function TrapView({ round, playerId, onSubmit }) {
 
     return (
         <div className="card">
+            {/* Timer display */}
+            <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: '0.5rem',
+                marginBottom: '1rem',
+                padding: '0.75rem',
+                background: `rgba(${timeLeft <= 10 ? '255, 0, 0' : '255, 0, 0'}, 0.1)`,
+                border: `2px solid ${timerColor}`,
+                borderRadius: '8px',
+                animation: isUrgent ? 'pulse 0.5s infinite' : 'none'
+            }}>
+                <Clock size={20} color={timerColor} />
+                <span style={{
+                    fontFamily: 'monospace',
+                    fontSize: '1.5rem',
+                    fontWeight: 'bold',
+                    color: timerColor,
+                    textShadow: isUrgent ? `0 0 10px ${timerColor}` : 'none'
+                }}>
+                    {timeLeft}s
+                </span>
+                {timeLeft <= 10 && (
+                    <span style={{
+                        fontFamily: 'monospace',
+                        fontSize: '0.8rem',
+                        color: timerColor,
+                        marginLeft: '0.5rem'
+                    }}>
+                        HURRY!
+                    </span>
+                )}
+            </div>
+
             {/* System breach header */}
             <div style={{
                 fontFamily: 'monospace',

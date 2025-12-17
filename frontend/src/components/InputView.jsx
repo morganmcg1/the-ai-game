@@ -1,9 +1,29 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { Clock } from 'lucide-react';
 
-export function InputView({ round, playerId, onSubmit, flatTop = false }) {
+const DEFAULT_TIMEOUT_SECONDS = 30;
+
+export function InputView({ round, playerId, onSubmit, flatTop = false, config = {} }) {
+    const timeoutSeconds = config.submission_timeout_seconds || DEFAULT_TIMEOUT_SECONDS;
     const [strategy, setStrategy] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [timeLeft, setTimeLeft] = useState(timeoutSeconds);
+
+    // Countdown timer effect
+    useEffect(() => {
+        if (!round.submission_start_time) return;
+
+        const updateTimer = () => {
+            const elapsed = (Date.now() / 1000) - round.submission_start_time;
+            const remaining = Math.max(0, timeoutSeconds - elapsed);
+            setTimeLeft(Math.ceil(remaining));
+        };
+
+        updateTimer(); // Initial update
+        const interval = setInterval(updateTimer, 100);
+        return () => clearInterval(interval);
+    }, [round.submission_start_time, timeoutSeconds]);
 
     const handleSubmit = async () => {
         if (!strategy.trim() || isSubmitting) return;
@@ -27,8 +47,54 @@ export function InputView({ round, playerId, onSubmit, flatTop = false }) {
         }
     };
 
+    // Timer color based on urgency
+    const getTimerColor = () => {
+        if (timeLeft <= 5) return '#ff0000';
+        if (timeLeft <= 10) return '#ff6600';
+        if (timeLeft <= 15) return '#ffcc00';
+        return 'var(--primary)';
+    };
+
+    const timerColor = getTimerColor();
+    const isUrgent = timeLeft <= 10;
+
     return (
         <div className="card input-card" style={flatTop ? { borderTopLeftRadius: 0, borderTopRightRadius: 0, marginTop: 0 } : {}}>
+            {/* Timer display */}
+            <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: '0.5rem',
+                marginBottom: '1rem',
+                padding: '0.75rem',
+                background: `rgba(${timeLeft <= 10 ? '255, 0, 0' : '0, 255, 255'}, 0.1)`,
+                border: `2px solid ${timerColor}`,
+                borderRadius: '8px',
+                animation: isUrgent ? 'pulse 0.5s infinite' : 'none'
+            }}>
+                <Clock size={20} color={timerColor} />
+                <span style={{
+                    fontFamily: 'monospace',
+                    fontSize: '1.5rem',
+                    fontWeight: 'bold',
+                    color: timerColor,
+                    textShadow: isUrgent ? `0 0 10px ${timerColor}` : 'none'
+                }}>
+                    {timeLeft}s
+                </span>
+                {timeLeft <= 10 && (
+                    <span style={{
+                        fontFamily: 'monospace',
+                        fontSize: '0.8rem',
+                        color: timerColor,
+                        marginLeft: '0.5rem'
+                    }}>
+                        HURRY!
+                    </span>
+                )}
+            </div>
+
             <h3 style={{ fontFamily: 'monospace', color: 'var(--secondary)' }}>SURVIVAL PROTOCOL</h3>
             <p className="hint-text" style={{ fontFamily: 'monospace' }}>&gt; Input your survival strategy. Be creative to maintain data integrity...</p>
             <div className="input-wrapper">

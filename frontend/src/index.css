@@ -331,6 +331,11 @@ input:focus {
   100% { transform: translateY(100vh); }
 }
 
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.02); }
+}
+
 .system-header {
   font-family: 'Courier New', monospace;
   position: relative;

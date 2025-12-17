@@ -1,8 +1,8 @@
-# Project: Death by AI
+# Project: Mas AI
 
-A multiplayer survival party game where players respond to AI-generated deadly scenarios. An AI judge evaluates survival strategies and determines who lives or dies. Features AI-generated scenario images and death scenes.
+A multiplayer survival party game where players respond to AI-generated deadly scenarios. An AI judge evaluates survival strategies and determines who lives or dies. Features AI-generated scenario images, death scenes, character avatars, and personalized end-game videos.
 
-**Tech Stack:** React 19 frontend + FastAPI backend + Modal serverless deployment + OpenRouter LLM (Kimi K2) + FAL AI image generation
+**Tech Stack:** React 19 frontend + FastAPI backend + Modal serverless deployment + OpenRouter LLM (Kimi K2) + FAL AI image/video generation
 
 ---
 
@@ -13,73 +13,130 @@ A multiplayer survival party game where players respond to AI-generated deadly s
 - New Game: Creates game with unique 4-character code, creator becomes admin (Cmd+Enter shortcut)
 - Join Game: Enter game code + player name
 
-### 2. Game Lobby (`App.jsx` - status: 'lobby')
-- Displays all connected players
+### 2. Character Creation (`Lobby.jsx` - character mode)
+- Optional 5-field character customization:
+  - Physical Vibe, Signature Weapon, Hidden Talent, Fatal Flaw, Catchphrase
+- Can skip character creation entirely
+- If provided, generates AI character avatar asynchronously
+- Preview mode shows generated avatar before entering lobby
+- Can regenerate avatar with different visual style
+
+### 3. Game Lobby (`App.jsx` - status: 'lobby')
+- Displays all connected players with avatars (if created)
+- Players only visible once they complete character preview (`in_lobby` gate)
 - Admin sees "START GAME" button
 - Non-admins see "Waiting for {hostName} to start the game..."
 - First player to join is automatically admin
 
-### 3. Scenario View (`ScenarioView.jsx` - round status: 'scenario')
-- Displays AI-generated deadly scenario
+### 4. Scenario View (`ScenarioView.jsx` - round status: 'scenario')
+- Displays AI-generated deadly scenario with narrative framing
 - Shows AI-generated scenario image
+- System message displays round progression (e.g., "CALIBRATION MODE // ANOMALIES DETECTED")
 - Dead players see "WITNESS THE CARNAGE" spectator message
 
-### 4. Strategy Input (`InputView.jsx` - round status: 'strategy')
+### 5. Strategy Input (`InputView.jsx` - round status: 'strategy')
 - Textarea for survival strategy submission
 - Keyboard shortcut: Cmd/Ctrl + Enter to submit
 - Shows "TRANSMITTING..." during submission
 - After submission: "STRATEGY UPLOADED. AWAITING JUDGEMENT."
 
-### 5. Judgement State (`App.jsx` - round status: 'judgement')
+### 6. Judgement State (`App.jsx` - round status: 'judgement')
 - "JUDGING..." with glitch text animation
 - AI evaluates all strategies in parallel
 - Generates result images in parallel
 
-### 6. Results View (`ResultsView.jsx` - round status: 'results')
+### 7. Results View (`ResultsView.jsx` - round status: 'results')
 - "JUDGEMENT DAY" title with glitch effect
-- Player cards showing: name, strategy, death reason (if dead), points earned
+- Player cards showing: name, strategy, death/survival reason, result image, points earned
 - Leaderboard showing current standings
 - Admin sees "NEXT ROUND" or "END GAME" button
 
-### 7. Game Over (`App.jsx` - status: 'finished')
-- Winner announcement with gold styling
+### 8. Game Over (`App.jsx` - status: 'finished')
+- Video generation starts asynchronously (4-phase parallel pipeline)
+- Shows "EXTRACTING CONSCIOUSNESS DATA..." during video generation
+- Video carousel displays personalized 10-second videos for all players
+- Winner gets triumphant message, others get consoling/humorous messages
 - Final standings leaderboard
-- "PLAY AGAIN" button
+- "RE-ENTER SIMULATION" button to play again
 
 ---
 
 ## Round Types
 
 ### Survival Mode (default)
-- AI generates deadly scenario
+- AI generates deadly scenario with narrative framing
 - Players submit survival strategies
 - AI judges each strategy and determines survival
+- +100 points for surviving
 
 ### Blind Architect Mode
 - Players design deadly scenarios for opponents
 - Visual voting on trap images (no text shown)
 - Winner's trap becomes the scenario
 - Trap creator gets +500 bonus points
+- Then proceeds to standard strategy/judgement phase
+
+### Ranked Mode
+- All strategies are compared and ranked by the LLM judge
+- Everyone survives, but points awarded based on rank position
+- Must wait for ALL submissions before judging (comparative evaluation)
+- Ranking criteria: creativity, effectiveness, entertainment value, specificity
+- **Scoring** (4+ players): 1st: 300, 2nd: 200, 3rd: 100, 4th: 50, 5th+: 25
+- **Scoring** (3 players): 1st: 250, 2nd: 125, 3rd: 25
+- **Scoring** (2 players): 1st: 200, 2nd: 50
+- Images generated in parallel after ranking is determined
 
 ### Cooperative Mode
 - Team-based survival round
-- Players vote on best strategy
-- Random +200/-200 point swings add chaos
+- Players submit strategies and AI generates images for each
+- Players vote on best strategy image
+- Vote points distributed: +200 (1st), +100 (2nd), 0 (middle), -100 (last)
+- Team survives/fails based on highest-voted strategy judgement
+- If survived: Random player gets +200 bonus
+- If failed: All alive players lose -100 points
+
+### Sacrifice Mode
+- One player must die heroically so others survive
+- **Volunteer Phase**: Players click "I VOLUNTEER AS TRIBUTE" to nominate themselves
+- **Voting Phase**: All players vote on who becomes the martyr
+  - If volunteers exist: vote only among volunteers
+  - If NO volunteers: everyone is eligible (cowards get drafted)
+- **Submission Phase**: Chosen martyr writes their epic death speech/action
+- **Judgement Phase**: AI judges how epic the death was
+- **Results**:
+  - Epic death → Martyr: +500 pts, all others survive with +100 pts each
+  - Lame death → Everyone dies, no points awarded
+
+### Last Stand Mode (Final Boss)
+- Brutal final round with harsh AI judgement (~20-30% survival rate)
+- **Strategy Phase**: Standard strategy submission
+- **Judgement Phase**: AI judges harshly - only exceptional strategies survive
+- **Revival Phase** (if survivors AND dead players exist):
+  - Survivors vote to revive ONE dead player
+  - Must be **unanimous** (all survivors pick same person)
+  - Dead players' strategies are visible to help decide
+  - If unanimous: Revived player's strategy gets re-judged with teamwork bonus
+  - If not unanimous: No revival, dead stay dead
+- Skips revival if everyone survived or everyone died
 
 ---
 
 ## Game Mechanics
 
 ### Scoring
-- **+100 points**: Survive a round
+- **+100 points**: Survive a survival/last_stand round
 - **+500 points**: Win trap voting (Blind Architect mode)
-- **+200/-200 points**: Random bonus/penalty (Cooperative mode)
+- **+500 points**: Epic sacrifice death (Sacrifice mode - martyr only)
+- **+100 points**: Saved by epic sacrifice (Sacrifice mode - survivors)
+- **Cooperative voting**: +200 (1st), +100 (2nd), 0 (middle), -100 (last)
+- **Cooperative team outcome**: +200 random bonus if survived, -100 all if failed
+- **Ranked mode** (4+ players): 1st: 300, 2nd: 200, 3rd: 100, 4th: 50, 5th+: 25
 - Winner: Highest score after all rounds
 
 ### Round Configuration
 Rounds are configured via `round_config` array in GameState:
 ```python
-round_config: List[str] = ["survival", "survival", "cooperative", "survival", "blind_architect"]
+round_config: list[str] = ["survival", "survival", "cooperative", "sacrifice", "last_stand"]
 ```
 The last round type in the array is always used for the final round.
 
@@ -92,7 +149,20 @@ The last round type in the array is always used for the final round.
 ### Player States
 - `is_alive`: Tracked per round
 - `is_admin`: First player to join
+- `in_lobby`: Controls visibility during lobby (set after character preview)
 - Players "resurrected" between rounds (death is per-round, not permanent)
+
+### Narrative Progression
+System messages displayed based on round progression:
+- Round 1: "SYSTEM BOOT // LEVEL 1 INITIALIZED"
+- Round 2: "CALIBRATION MODE // ANOMALIES DETECTED"
+- Final: "EXIT PROTOCOL // FINAL LEVEL"
+- Mid rounds: "WARNING: CORRUPTION AT X% // REALITY UNSTABLE"
+- Blind Architect: "SECURITY BREACH DETECTED // ARCHITECT PROTOCOL ACTIVATED"
+- Ranked: "PERFORMANCE EVALUATION // SURVIVAL EFFICIENCY RANKING PROTOCOL"
+- Cooperative: "CRITICAL ERROR // COLLABORATIVE SUBROUTINE REQUIRED"
+- Sacrifice: "CRITICAL FAILURE // ONE MUST FALL FOR OTHERS TO SURVIVE"
+- Last Stand: "EXIT PROTOCOL // FINAL LEVEL // MAXIMUM DIFFICULTY"
 
 ---
 
@@ -104,12 +174,16 @@ The last round type in the array is always used for the final round.
 |------|---------|
 | `App.jsx` | Main component, game state management, 2-second polling |
 | `api.js` | API client (createGame, joinGame, getGameState, etc.) |
-| `Lobby.jsx` | Welcome screen, create/join game |
-| `ScenarioView.jsx` | Display scenario text + image |
+| `Lobby.jsx` | Welcome screen, create/join game, character creation |
+| `ScenarioView.jsx` | Display scenario text + image + system message |
 | `InputView.jsx` | Strategy submission form |
 | `TrapView.jsx` | Blind Architect trap creation |
 | `VotingView.jsx` | Trap voting grid |
 | `CoopVotingView.jsx` | Cooperative mode strategy voting |
+| `SacrificeVolunteerView.jsx` | Sacrifice round volunteer phase |
+| `SacrificeVotingView.jsx` | Sacrifice round martyr voting |
+| `SacrificeSubmissionView.jsx` | Martyr death speech submission |
+| `RevivalVotingView.jsx` | Last Stand revival voting |
 | `ResultsView.jsx` | Round results display + leaderboard |
 | `index.css` | Global styles (neon/dark theme) |
 
@@ -127,8 +201,10 @@ The last round type in the array is always used for the final round.
 **Storage:** `modal.Dict` for game state persistence
 
 **AI Services:**
-- **LLM**: OpenRouter API with Kimi K2 model (`moonshotai/kimi-k2-0905`)
+- **LLM (Scenarios/Judgement)**: OpenRouter API with Kimi K2 model (`moonshotai/kimi-k2-0905`)
+- **LLM (Video Scripts)**: Mistral Small (`mistralai/mistral-small-3.1-24b-instruct`)
 - **Images**: FAL AI flux/krea model
+- **Videos**: FAL AI Kling 2.6 Pro (`kling-video/v2.6/pro/image-to-video`)
 
 ---
 
@@ -150,6 +226,26 @@ async def run_all_judgements():
 ```
 
 Uses `httpx.AsyncClient` for non-blocking HTTP requests to OpenRouter and FAL APIs.
+
+### Pre-warmed Scenarios
+
+Scenarios are generated in parallel when game is created:
+```python
+@app.function()
+async def prewarm_all_scenarios(game_code: str, num_rounds: int, round_config: list[str]):
+    # Generates all survival scenarios concurrently
+    # Skips blind_architect rounds (scenario comes from player trap)
+```
+
+### End-Game Video Generation
+
+4-phase parallel pipeline when game finishes:
+1. **Phase 1**: Generate LLM prompts for all players in parallel (personalized scripts)
+2. **Phase 2**: Generate base images for all players in parallel
+3. **Phase 3**: Submit video requests in parallel (async queue)
+4. **Phase 4**: Poll all video statuses in parallel (5-second intervals, max 7.5 min)
+
+Videos stored in `game.player_videos` dict, status tracked via `game.videos_status`.
 
 ### Frontend Polling & State Sync
 
@@ -173,10 +269,26 @@ strategy → judgement → results
 trap_creation → trap_voting → strategy → judgement → results
 ```
 
+**Ranked Flow:**
+```
+strategy (wait for ALL) → ranked_judgement → results
+```
+
 **Cooperative Flow:**
 ```
 strategy → coop_voting → coop_judgement → results
 ```
+
+**Sacrifice Flow:**
+```
+sacrifice_volunteer → sacrifice_voting → sacrifice_submission → sacrifice_judgement → results
+```
+
+**Last Stand Flow:**
+```
+strategy → judgement → last_stand_revival → revival_judgement → results
+```
+(Revival phase skipped if everyone survived or everyone died)
 
 ### Modal Serverless Architecture
 
@@ -187,10 +299,20 @@ modal secret create ai-game-secrets MOONSHOT_API_KEY=xxx FAL_KEY=xxx --env ai-ga
 
 **Persistent Storage:** Uses `modal.Dict` for game state:
 ```python
-games = modal.Dict.from_name("death-by-ai-games", create_if_missing=True)
+games = modal.Dict.from_name("mas-ai-games", create_if_missing=True)
 ```
 
-**Async Functions:** Modal functions can be spawned with `.spawn()` for fire-and-forget execution.
+**Async Functions:** Modal functions can be spawned with `.spawn()` for fire-and-forget execution:
+- `prewarm_all_scenarios.spawn()` - Pre-generate scenarios at game creation
+- `generate_character_image.spawn()` - Generate character avatars
+- `generate_coop_strategy_images.spawn()` - Generate coop strategy images
+- `run_round_judgement.spawn()` - Run judgement phase
+- `run_ranked_judgement.spawn()` - Comparative ranking judgement
+- `run_coop_judgement.spawn()` - Run cooperative judgement
+- `run_sacrifice_judgement.spawn()` - Judge martyr's death (epic or lame)
+- `run_last_stand_judgement.spawn()` - Harsh final boss judgement
+- `run_revival_judgement.spawn()` - Re-judge revived player with bonus
+- `generate_all_player_videos.spawn()` - Generate end-game videos
 
 ### LLM Integration Notes
 
@@ -202,6 +324,10 @@ games = modal.Dict.from_name("death-by-ai-games", create_if_missing=True)
 **Error Recovery:** If judgement fails for a player, they default to "dead" with a generic message so the game can continue.
 
 ---
+
+## Debugging
+
+You can check the deployments logs on Modal to help with deployment issues like console errors or hung processes due to race conditions.
 
 ## Known Issues & Pitfalls
 
@@ -232,14 +358,23 @@ save_game(game)  # Save once at the end
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
 | `/api/create_game` | POST | Create new game, returns 4-char code |
-| `/api/join_game?code={code}` | POST | Join game with `{ name }` body |
+| `/api/join_game?code={code}` | POST | Join game with `{ name, character_description? }` body |
+| `/api/enter_lobby?code={code}` | POST | Mark player as ready for lobby `{ player_id }` |
 | `/api/get_game_state?code={code}&player_id={id}` | GET | Poll current state |
 | `/api/start_game?code={code}` | POST | Admin starts game |
 | `/api/submit_strategy?code={code}` | POST | Submit strategy `{ player_id, strategy }` |
 | `/api/submit_trap?code={code}` | POST | Submit trap `{ player_id, trap_text }` |
 | `/api/vote_trap?code={code}` | POST | Vote for trap `{ voter_id, target_id }` |
 | `/api/vote_coop?code={code}` | POST | Vote in coop mode `{ voter_id, target_id }` |
+| `/api/volunteer_sacrifice?code={code}` | POST | Volunteer as tribute `{ player_id }` |
+| `/api/advance_sacrifice_volunteer?code={code}` | POST | Admin advances to voting `{ player_id }` |
+| `/api/vote_sacrifice?code={code}` | POST | Vote for martyr `{ voter_id, target_id }` |
+| `/api/submit_sacrifice_speech?code={code}` | POST | Martyr submits death speech `{ player_id, speech }` |
+| `/api/vote_revival?code={code}` | POST | Survivor votes to revive `{ voter_id, target_id }` |
+| `/api/advance_revival?code={code}` | POST | Admin advances from revival `{ player_id }` |
 | `/api/next_round?code={code}` | POST | Admin advances round |
+| `/api/regenerate_character_image?code={code}` | POST | Regenerate avatar `{ player_id }` |
+| `/api/retry_player_videos?code={code}` | POST | Retry failed video generation |
 
 ---
 
@@ -247,39 +382,51 @@ save_game(game)  # Save once at the end
 
 ### GameState
 ```python
-id: str                    # UUID
-code: str                  # 4-char join code
-status: str                # "lobby" | "playing" | "finished"
-players: dict              # player_id -> Player
-rounds: list               # List of Round objects
+id: str                      # UUID
+code: str                    # 4-char join code
+status: str                  # "lobby" | "playing" | "finished"
+players: dict                # player_id -> Player
+rounds: list                 # List of Round objects
 current_round_idx: int
-max_rounds: int            # Default: 5
-round_config: list[str]    # Round types: ["survival", "survival", "cooperative", "survival", "blind_architect"]
+max_rounds: int              # Default: 5
+round_config: list[str]      # Round types
+created_at: float
+prewarmed_scenarios: list[str | None]  # Pre-generated scenarios
+player_videos: dict[str, str]          # player_id -> video URL
+videos_status: str           # "pending" | "generating" | "ready" | "failed"
+video_theme: str | None      # Consistent theme for all videos
+winner_id: str | None
 ```
 
 ### Player
 ```python
-id: str              # UUID
+id: str                      # UUID
 name: str
-score: int           # Accumulated points
-is_admin: bool       # First joiner
-is_alive: bool       # Current round status
-death_reason: str    # From AI judge (if dead)
-strategy: str        # Current round submission
-result_image_url: str
-last_active: float   # Heartbeat timestamp
+score: int                   # Accumulated points
+is_admin: bool               # First joiner
+is_alive: bool               # Current round status
+in_lobby: bool               # Has completed character preview
+death_reason: str | None     # From AI judge (if dead)
+survival_reason: str | None  # From AI judge (if survived)
+strategy: str | None         # Current round submission
+result_image_url: str | None
+last_active: float           # Heartbeat timestamp
+character_description: str | None  # Character creation fields
+character_image_url: str | None    # AI-generated avatar
 ```
 
 ### Round
 ```python
-number: int          # 1-5
-type: str            # "survival" | "blind_architect" | "cooperative"
-status: str          # "scenario" | "strategy" | "judgement" | "results" | "trap_creation" | "trap_voting" | "coop_voting" | "coop_judgement"
+number: int                  # 1-5
+type: str                    # "survival" | "blind_architect" | "cooperative" | "sacrifice" | "last_stand" | "ranked"
+status: str                  # "scenario" | "strategy" | "judgement" | "results" | "trap_creation" | "trap_voting" | "coop_voting" | "coop_judgement" | "sacrifice_volunteer" | "sacrifice_voting" | "sacrifice_submission" | "sacrifice_judgement" | "last_stand_revival" | "revival_judgement" | "ranked_judgement"
 scenario_text: str
-scenario_image_url: str
+scenario_image_url: str | None
+style_theme: str | None      # Visual style for all images in round
+system_message: str | None   # Narrative progression text
 
 # Blind Architect specific
-architect_id: str
+architect_id: str | None
 trap_proposals: dict
 trap_images: dict
 votes: dict
@@ -288,11 +435,48 @@ votes: dict
 strategy_images: dict
 coop_votes: dict
 coop_vote_points: dict
-coop_team_winner_id: str
-coop_team_loser_id: str
-coop_winning_strategy_id: str
-coop_team_survived: bool
+coop_team_winner_id: str | None
+coop_team_loser_id: str | None
+coop_winning_strategy_id: str | None
+coop_team_survived: bool | None
+
+# Sacrifice specific
+sacrifice_volunteers: dict   # player_id -> bool
+sacrifice_votes: dict        # voter_id -> volunteer_id
+martyr_id: str | None
+martyr_speech: str | None
+martyr_epic: bool | None     # was the death epic?
+martyr_reason: str | None
+martyr_image_url: str | None
+
+# Last Stand revival specific
+revival_votes: dict          # survivor_id -> dead_player_id
+revived_player_id: str | None
+revival_survived: bool | None
+revival_reason: str | None
+revival_image_url: str | None
+
+# Ranked round specific
+ranked_results: dict         # player_id -> rank (1 = first)
+ranked_points: dict          # player_id -> points awarded
+ranked_commentary: dict      # player_id -> LLM commentary
 ```
+
+---
+
+## Visual Styles
+
+### Image Style Themes (20 options)
+16-bit pixel art, 8-bit NES, claymation, vaporwave, comic book, anime, dark souls, borderlands, synthwave, Studio Ghibli, low-poly 3D, tarot card, ukiyo-e, cyberpunk 2077, Tim Burton, Mad Max, stained glass, Rick and Morty, medieval manuscript, noir
+
+### Video Style Themes (10 options)
+Epic fantasy awards ceremony, Cyberpunk neon awards show, Retro 80s game show, Underwater atlantis celebration, Space station victory ceremony, Ancient colosseum triumph, Haunted victorian mansion celebration, Jungle temple discovery, Steampunk airship deck, Anime tournament finals
+
+### Character Generation
+Random visual elements combined:
+- Look: cute, fierce, nerdy, punk, goth, hipster, gamer, cyberpunk
+- Moment: laughing, fighting, drinking, eating, sleeping, dancing, singing, playing with animals
+- Style: cyberpunk, noir, anime, vaporwave, pixel art, low poly, retro, 1960s space art, steampunk, lego movie
 
 ---
 

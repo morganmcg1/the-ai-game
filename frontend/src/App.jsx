@@ -6,6 +6,11 @@ import { ResultsView } from './components/ResultsView';
 import { TrapView } from './components/TrapView';
 import { VotingView } from './components/VotingView';
 import { CoopVotingView } from './components/CoopVotingView';
+import { SacrificeVolunteerView } from './components/SacrificeVolunteerView';
+import { SacrificeVotingView } from './components/SacrificeVotingView';
+import { SacrificeSubmissionView } from './components/SacrificeSubmissionView';
+import { RevivalVotingView } from './components/RevivalVotingView';
+import { DebugMenu } from './components/DebugMenu';
 import { Copy, Check, RefreshCw, Trophy, Video, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api } from './api';
 
@@ -206,15 +211,36 @@ function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showDebugMenu, setShowDebugMenu] = useState(false);
 
   // Ref to track locally submitted strategy to prevent polling from overwriting it (race condition)
   const pendingStrategyRef = useRef(null);
 
-  // Polling logic
+  // Debug menu keyboard shortcut (Ctrl+Shift+D or Cmd+Shift+D)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        setShowDebugMenu(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Debug skip handler
+  const handleDebugSkip = async (options) => {
+    if (!gameCode || !playerId) {
+      return { error: 'No active game. Join or create a game first.' };
+    }
+    return api.debugSkipToState(gameCode, playerId, options);
+  };
+
+  // Polling logic - fetches game state immediately and then every 2 seconds
   useEffect(() => {
     if (!gameCode) return;
 
-    const interval = setInterval(async () => {
+    const fetchGameState = async () => {
       try {
         const state = await api.getGameState(gameCode, playerId);
         if (state && !state.error) {
@@ -249,7 +275,13 @@ function App() {
       } catch (e) {
         console.error("Polling error", e);
       }
-    }, 2000); // 2 second poll
+    };
+
+    // Fetch immediately when entering the lobby (don't wait for first interval)
+    fetchGameState();
+
+    // Then continue polling every 2 seconds
+    const interval = setInterval(fetchGameState, 2000);
 
     return () => clearInterval(interval);
   }, [gameCode, playerId]);
@@ -320,15 +352,69 @@ function App() {
     }
   };
 
+  // Sacrifice round handlers
+  const volunteerSacrifice = async () => {
+    if (gameCode && playerId) {
+      await api.volunteerSacrifice(gameCode, playerId);
+    }
+  };
+
+  const advanceSacrificeVolunteer = async () => {
+    if (gameCode && playerId) {
+      await api.advanceSacrificeVolunteer(gameCode, playerId);
+    }
+  };
+
+  const voteSacrifice = async (targetId) => {
+    if (gameCode && playerId) {
+      await api.voteSacrifice(gameCode, playerId, targetId);
+    }
+  };
+
+  const submitSacrificeSpeech = async (speech) => {
+    if (gameCode && playerId) {
+      await api.submitSacrificeSpeech(gameCode, playerId, speech);
+    }
+  };
+
+  // Last Stand revival handlers
+  const voteRevival = async (targetId) => {
+    if (gameCode && playerId) {
+      await api.voteRevival(gameCode, playerId, targetId);
+    }
+  };
+
+  const advanceRevival = async () => {
+    if (gameCode && playerId) {
+      await api.advanceRevival(gameCode, playerId);
+    }
+  };
+
   const nextRound = async () => {
     if (gameCode) {
       await api.nextRound(gameCode);
     }
   };
 
+  // Debug menu component (rendered on all screens)
+  const debugMenuComponent = (
+    <DebugMenu
+      isOpen={showDebugMenu}
+      onClose={() => setShowDebugMenu(false)}
+      gameCode={gameCode}
+      playerId={playerId}
+      onSkip={handleDebugSkip}
+    />
+  );
+
   // Render Logic
   if (!gameState) {
-    return <Lobby onJoin={handleJoin} onAdmin={setIsAdmin} setPlayerId={setPlayerId} />;
+    return (
+      <>
+        {debugMenuComponent}
+        <Lobby onJoin={handleJoin} onAdmin={setIsAdmin} setPlayerId={setPlayerId} />
+      </>
+    );
   }
 
   const currentRound = gameState.rounds[gameState.current_round_idx];
@@ -349,6 +435,8 @@ function App() {
     };
 
     return (
+      <>
+      {debugMenuComponent}
       <div className="card" style={{ textAlign: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
           <h2 style={{ margin: 0 }}>LOBBY: {gameCode}</h2>
@@ -460,6 +548,7 @@ function App() {
           <p style={{ color: 'var(--secondary)', opacity: 0.8 }}>Waiting for {hostName} to start the game...</p>
         )}
       </div>
+      </>
     );
   }
 
@@ -478,6 +567,8 @@ function App() {
     };
 
     return (
+      <>
+      {debugMenuComponent}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2rem', padding: '2rem' }}>
         <h1 className="glitch-text" style={{ fontSize: '3rem', textAlign: 'center' }}>EXIT PROTOCOL COMPLETE</h1>
         <p style={{ fontFamily: 'monospace', color: '#0f0', textAlign: 'center', marginTop: '-1rem' }}>
@@ -557,6 +648,7 @@ function App() {
           RE-ENTER SIMULATION
         </button>
       </div>
+      </>
     );
   }
 
@@ -566,14 +658,17 @@ function App() {
     // For MVP transparency, results view is good or Spectator Scenario View.
     const isDead = player && !player.is_alive;
 
-    // Header
+    // Header (includes debug menu)
     const header = (
-      <GameHeader
-        currentRound={currentRound.number}
-        maxRounds={gameState.max_rounds}
-        score={player ? player.score : 0}
-        playerName={player ? player.name : 'PLAYER'}
-      />
+      <>
+        {debugMenuComponent}
+        <GameHeader
+          currentRound={currentRound.number}
+          maxRounds={gameState.max_rounds}
+          score={player ? player.score : 0}
+          playerName={player ? player.name : 'PLAYER'}
+        />
+      </>
     );
 
     if (currentRound.status === 'scenario') {
@@ -604,7 +699,7 @@ function App() {
         <>
           {header}
           <ScenarioView round={currentRound} isSpectating={false} flatBottom={true} />
-          <InputView round={currentRound} playerId={playerId} onSubmit={submitStrategy} flatTop={true} />
+          <InputView round={currentRound} playerId={playerId} onSubmit={submitStrategy} flatTop={true} config={gameState.config} />
         </>
       );
     }
@@ -622,11 +717,24 @@ function App() {
       );
     }
 
+    if (currentRound.status === 'ranked_judgement') {
+      return (
+        <div className="card" style={{ textAlign: 'center' }}>
+          {header}
+          <h2 className="glitch-text" style={{ color: '#ffd700' }}>RANKING PROTOCOLS...</h2>
+          <p style={{ fontFamily: 'monospace', color: 'var(--secondary)' }}>
+            &gt; COMPARING ALL SURVIVAL STRATEGIES...
+          </p>
+          <span className="loader"></span>
+        </div>
+      );
+    }
+
     if (currentRound.status === 'trap_creation') {
       return (
         <>
           {header}
-          <TrapView round={currentRound} playerId={playerId} onSubmit={submitTrap} />
+          <TrapView round={currentRound} playerId={playerId} onSubmit={submitTrap} config={gameState.config} />
         </>
       );
     }
@@ -667,6 +775,95 @@ function App() {
       );
     }
 
+    // Sacrifice round statuses
+    if (currentRound.status === 'sacrifice_volunteer') {
+      return (
+        <>
+          {header}
+          <SacrificeVolunteerView
+            round={currentRound}
+            playerId={playerId}
+            players={gameState.players}
+            isAdmin={isAdmin}
+            onVolunteer={volunteerSacrifice}
+            onAdvance={advanceSacrificeVolunteer}
+          />
+        </>
+      );
+    }
+
+    if (currentRound.status === 'sacrifice_voting') {
+      return (
+        <>
+          {header}
+          <SacrificeVotingView
+            round={currentRound}
+            playerId={playerId}
+            players={gameState.players}
+            onVote={voteSacrifice}
+          />
+        </>
+      );
+    }
+
+    if (currentRound.status === 'sacrifice_submission') {
+      return (
+        <>
+          {header}
+          <SacrificeSubmissionView
+            round={currentRound}
+            playerId={playerId}
+            players={gameState.players}
+            onSubmit={submitSacrificeSpeech}
+            config={gameState.config}
+          />
+        </>
+      );
+    }
+
+    if (currentRound.status === 'sacrifice_judgement') {
+      return (
+        <div className="card" style={{ textAlign: 'center' }}>
+          {header}
+          <h2 className="glitch-text" style={{ color: '#ffd700' }}>EVALUATING SACRIFICE...</h2>
+          <p style={{ fontFamily: 'monospace', color: 'var(--secondary)' }}>
+            &gt; DETERMINING IF DEATH WAS EPIC ENOUGH...
+          </p>
+          <span className="loader"></span>
+        </div>
+      );
+    }
+
+    // Last Stand revival statuses
+    if (currentRound.status === 'last_stand_revival') {
+      return (
+        <>
+          {header}
+          <RevivalVotingView
+            round={currentRound}
+            playerId={playerId}
+            players={gameState.players}
+            isAdmin={isAdmin}
+            onVote={voteRevival}
+            onAdvance={advanceRevival}
+          />
+        </>
+      );
+    }
+
+    if (currentRound.status === 'revival_judgement') {
+      return (
+        <div className="card" style={{ textAlign: 'center' }}>
+          {header}
+          <h2 className="glitch-text" style={{ color: '#0f0' }}>REVIVAL IN PROGRESS...</h2>
+          <p style={{ fontFamily: 'monospace', color: 'var(--secondary)' }}>
+            &gt; RE-EVALUATING WITH TEAMWORK BONUS...
+          </p>
+          <span className="loader"></span>
+        </div>
+      );
+    }
+
     if (currentRound.status === 'results') {
       const isFinalRound = currentRound.number >= gameState.max_rounds;
       return (
@@ -683,7 +880,18 @@ function App() {
     }
   }
 
-  return <div>Unknown State</div>;
+  return (
+    <>
+      <DebugMenu
+        isOpen={showDebugMenu}
+        onClose={() => setShowDebugMenu(false)}
+        gameCode={gameCode}
+        playerId={playerId}
+        onSkip={handleDebugSkip}
+      />
+      <div>Unknown State</div>
+    </>
+  );
 }
 
 export default App;

@@ -5,6 +5,7 @@ import { Skull, Heart, Trophy, Medal, Users, Terminal } from 'lucide-react';
 export function ResultsView({ round, players }) {
     const sortedPlayers = Object.values(players).sort((a, b) => b.score - a.score);
     const isCooperativeRound = round.type === 'cooperative';
+    const isRankedRound = round.type === 'ranked';
 
     const getRankStyle = (index) => {
         if (index === 0) return { color: '#FFD700', icon: '1st' }; // Gold
@@ -13,10 +14,23 @@ export function ResultsView({ round, players }) {
         return { color: '#888', icon: `${index + 1}th` };
     };
 
+    // For ranked rounds, sort players by their rank
+    const rankedPlayers = isRankedRound
+        ? Object.values(players)
+            .filter(p => round.ranked_results && round.ranked_results[p.id])
+            .sort((a, b) => (round.ranked_results[a.id] || 99) - (round.ranked_results[b.id] || 99))
+        : [];
+
+    const getTitle = () => {
+        if (isCooperativeRound) return 'TEAM SYNC RESULTS';
+        if (isRankedRound) return 'SURVIVAL RANKINGS';
+        return 'PROCESSING COMPLETE';
+    };
+
     return (
-        <div style={{ width: '100%', maxWidth: '800px' }}>
-            <h1 className="glitch-text" style={{ textAlign: 'center', marginBottom: '2rem' }}>
-                {isCooperativeRound ? 'TEAM SYNC RESULTS' : 'PROCESSING COMPLETE'}
+        <div style={{ width: '100%', maxWidth: '1100px' }}>
+            <h1 className="glitch-text" style={{ textAlign: 'center', marginBottom: '2rem', color: isRankedRound ? '#ffd700' : undefined }}>
+                {getTitle()}
             </h1>
 
             {/* Cooperative Round: Team Outcome Card */}
@@ -118,12 +132,115 @@ export function ResultsView({ round, players }) {
                 </motion.div>
             )}
 
-            {/* Non-cooperative: Show individual player cards in a compact grid */}
-            {!isCooperativeRound && (
+            {/* Ranked Round: Show players sorted by rank */}
+            {isRankedRound && (
                 <div style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-                    gap: '1rem'
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                    gap: '1.5rem',
+                    maxWidth: '1100px'
+                }}>
+                    {rankedPlayers.map((player, index) => {
+                        const rank = round.ranked_results[player.id];
+                        const points = round.ranked_points?.[player.id] || 0;
+                        const commentary = round.ranked_commentary?.[player.id] || '';
+                        const rankStyle = getRankStyle(index);
+
+                        return (
+                            <motion.div
+                                key={player.id}
+                                className="card"
+                                style={{
+                                    padding: '0',
+                                    overflow: 'hidden',
+                                    border: `2px solid ${rankStyle.color}`,
+                                }}
+                                initial={{ opacity: 0, scale: 0.9 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                transition={{ delay: index * 0.1 }}
+                            >
+                                {/* Result Image */}
+                                {player.result_image_url ? (
+                                    <div style={{ position: 'relative' }}>
+                                        <img
+                                            src={player.result_image_url}
+                                            alt="Result"
+                                            style={{ width: '100%', height: 'auto', display: 'block' }}
+                                        />
+                                        {/* Rank badge */}
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: '0.5rem',
+                                            right: '0.5rem',
+                                            background: rankStyle.color,
+                                            borderRadius: '8px',
+                                            padding: '0.4rem 0.8rem',
+                                            fontWeight: 'bold',
+                                            color: '#000',
+                                            fontSize: '0.9rem'
+                                        }}>
+                                            {rankStyle.icon}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div style={{
+                                        aspectRatio: '16/9',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        background: '#1a1a1a'
+                                    }}>
+                                        <span className="spinner"></span>
+                                    </div>
+                                )}
+
+                                {/* Info section */}
+                                <div style={{ padding: '1rem' }}>
+                                    <div style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        marginBottom: '0.5rem'
+                                    }}>
+                                        <span style={{
+                                            fontWeight: 'bold',
+                                            fontSize: '1.1rem',
+                                            color: rankStyle.color
+                                        }}>
+                                            {player.name}
+                                        </span>
+                                        <span style={{
+                                            color: rankStyle.color,
+                                            fontWeight: 'bold',
+                                            fontSize: '1rem'
+                                        }}>
+                                            +{points}
+                                        </span>
+                                    </div>
+
+                                    {/* Commentary */}
+                                    <div style={{
+                                        fontSize: '0.85rem',
+                                        color: '#ccc',
+                                        lineHeight: '1.3',
+                                        fontStyle: 'italic'
+                                    }}>
+                                        {commentary}
+                                    </div>
+                                </div>
+                            </motion.div>
+                        );
+                    })}
+                </div>
+            )}
+
+            {/* Non-cooperative/Non-ranked: Show individual player cards in 3-column grid */}
+            {!isCooperativeRound && !isRankedRound && (
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+                    gap: '1rem',
+                    maxWidth: '1100px'
                 }}>
                     {sortedPlayers.map((player, index) => (
                         <motion.div
@@ -218,18 +335,18 @@ export function ResultsView({ round, players }) {
                 </div>
             )}
 
-            {/* Leaderboard Section */}
+            {/* Leaderboard Section - Right aligned */}
             <motion.div
                 initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5 }}
-                style={{ marginTop: '3rem' }}
+                style={{ marginTop: '3rem', marginLeft: 'auto', maxWidth: '320px' }}
             >
-                <h2 style={{ textAlign: 'center', marginBottom: '1.5rem', color: 'var(--primary)' }}>
-                    <Trophy size={24} style={{ verticalAlign: 'middle', marginRight: '0.5rem' }} />
+                <h2 style={{ textAlign: 'center', marginBottom: '1rem', color: 'var(--primary)', fontSize: '1.1rem' }}>
+                    <Trophy size={20} style={{ verticalAlign: 'middle', marginRight: '0.5rem' }} />
                     INTEGRITY RANKINGS
                 </h2>
-                <div className="card" style={{ width: '100%', padding: '1rem' }}>
+                <div className="card" style={{ width: '100%', padding: '0.75rem' }}>
                     {sortedPlayers.map((player, index) => {
                         const rankStyle = getRankStyle(index);
                         return (
@@ -242,28 +359,28 @@ export function ResultsView({ round, players }) {
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'space-between',
-                                    padding: '0.75rem 1rem',
+                                    padding: '0.5rem 0.75rem',
                                     borderBottom: index < sortedPlayers.length - 1 ? '1px solid #333' : 'none',
                                     background: index === 0 ? 'rgba(255, 215, 0, 0.1)' : 'transparent'
                                 }}
                             >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                     <span style={{
                                         color: rankStyle.color,
                                         fontWeight: 'bold',
-                                        fontSize: '1.1rem',
-                                        minWidth: '40px'
+                                        fontSize: '0.9rem',
+                                        minWidth: '32px'
                                     }}>
                                         {rankStyle.icon}
                                     </span>
-                                    <span style={{ color: '#fff', fontSize: '1rem' }}>{player.name}</span>
+                                    <span style={{ color: '#fff', fontSize: '0.9rem' }}>{player.name}</span>
                                 </div>
                                 <span style={{
                                     color: 'var(--primary)',
                                     fontWeight: 'bold',
-                                    fontSize: '1.1rem'
+                                    fontSize: '0.9rem'
                                 }}>
-                                    {player.score.toLocaleString()} PTS
+                                    {player.score.toLocaleString()}
                                 </span>
                             </motion.div>
                         );

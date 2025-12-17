@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Shuffle } from 'lucide-react';
 import { api } from '../api';
 
 // 5 character description fields
@@ -35,7 +35,7 @@ const CHARACTER_FIELDS = [
 export function Lobby({ onJoin, onAdmin, setPlayerId }) {
     const [name, setName] = useState('');
     const [code, setCode] = useState('');
-    const [mode, setMode] = useState('menu'); // 'menu', 'join', 'character', or 'preview'
+    const [mode, setMode] = useState('menu'); // 'menu', 'join', 'character', 'random_select', or 'preview'
     const [error, setError] = useState('');
     const [isCreating, setIsCreating] = useState(false);
     const [isJoining, setIsJoining] = useState(false);
@@ -50,8 +50,14 @@ export function Lobby({ onJoin, onAdmin, setPlayerId }) {
         catchphrase: ''
     });
 
+    // Random character selection state
+    const [randomCharacters, setRandomCharacters] = useState([]); // Array of { traits, prompt, url }
+    const [isLoadingRandom, setIsLoadingRandom] = useState(false);
+    const [selectedRandomIdx, setSelectedRandomIdx] = useState(null);
+
     // Preview state - stored after joining but before going to lobby
-    const [previewData, setPreviewData] = useState(null); // { gameCode, playerId, isAdmin, characterImageUrl }
+    // traits: { look, weapon, talent, flaw, catchphrase }
+    const [previewData, setPreviewData] = useState(null); // { gameCode, playerId, isAdmin, characterImageUrl, traits }
     const [isRegenerating, setIsRegenerating] = useState(false);
 
     // Combine character fields into a single prompt
@@ -82,6 +88,80 @@ export function Lobby({ onJoin, onAdmin, setPlayerId }) {
         setError('');
         setPendingAction(action);
         setMode('character');
+    };
+
+    // Generate 8 random characters
+    const handleGenerateRandom = async () => {
+        setIsLoadingRandom(true);
+        setRandomCharacters([]);
+        setSelectedRandomIdx(null);
+        setMode('random_select');
+        setError('');
+
+        try {
+            const result = await api.generateRandomCharacters();
+            if (result.characters && result.characters.length > 0) {
+                setRandomCharacters(result.characters);
+            } else {
+                setError("Failed to generate random characters. Try again!");
+                setMode('character');
+            }
+        } catch (e) {
+            console.error("Random generation error:", e);
+            setError("Failed to generate random characters. Try again!");
+            setMode('character');
+        }
+        setIsLoadingRandom(false);
+    };
+
+    // Handle selecting a random character and joining
+    const handleSelectRandomCharacter = async (idx) => {
+        const selected = randomCharacters[idx];
+        if (!selected) return;
+
+        setSelectedRandomIdx(idx);
+        setIsCreating(pendingAction === 'create');
+        setIsJoining(pendingAction === 'join');
+        setError('');
+
+        try {
+            if (pendingAction === 'create') {
+                const data = await api.createGame();
+                if (data.code) {
+                    // Join with the selected character's prompt AND the pre-generated image URL
+                    const joinData = await api.joinGame(data.code, name || "Admin", selected.prompt, selected.url);
+                    if (joinData.error) throw new Error(joinData.error);
+
+                    // Go directly to preview with the already-generated image and traits
+                    setPreviewData({
+                        gameCode: data.code,
+                        playerId: joinData.player_id,
+                        isAdmin: true,
+                        characterImageUrl: selected.url,
+                        traits: selected.traits // Include the random traits
+                    });
+                    setMode('preview');
+                }
+            } else {
+                // Join existing game with pre-generated image
+                const joinData = await api.joinGame(code, name, selected.prompt, selected.url);
+                if (joinData.error) throw new Error(joinData.error);
+
+                setPreviewData({
+                    gameCode: code,
+                    playerId: joinData.player_id,
+                    isAdmin: joinData.is_admin,
+                    characterImageUrl: selected.url,
+                    traits: selected.traits // Include the random traits
+                });
+                setMode('preview');
+            }
+        } catch (e) {
+            setError('Failed to join game. ' + e.message);
+            setMode('random_select');
+        }
+        setIsCreating(false);
+        setIsJoining(false);
     };
 
     // Poll for character image when in preview mode
@@ -127,12 +207,13 @@ export function Lobby({ onJoin, onAdmin, setPlayerId }) {
                     onJoin(data.code, joinData.player_id, name || "Admin");
                     setPlayerId(joinData.player_id);
                 } else {
-                    // Go to preview mode
+                    // Go to preview mode with custom traits
                     setPreviewData({
                         gameCode: data.code,
                         playerId: joinData.player_id,
                         isAdmin: true,
-                        characterImageUrl: null
+                        characterImageUrl: null,
+                        traits: { ...characterFields } // Include custom traits
                     });
                     setMode('preview');
                     setIsCreating(false);
@@ -159,12 +240,13 @@ export function Lobby({ onJoin, onAdmin, setPlayerId }) {
                 onJoin(code, joinData.player_id, name);
                 setPlayerId(joinData.player_id);
             } else {
-                // Go to preview mode
+                // Go to preview mode with custom traits
                 setPreviewData({
                     gameCode: code,
                     playerId: joinData.player_id,
                     isAdmin: joinData.is_admin,
-                    characterImageUrl: null
+                    characterImageUrl: null,
+                    traits: { ...characterFields } // Include custom traits
                 });
                 setMode('preview');
                 setIsJoining(false);
@@ -367,6 +449,31 @@ export function Lobby({ onJoin, onAdmin, setPlayerId }) {
                                     <span style={{ opacity: 0.6, fontSize: '0.75rem', marginLeft: '0.5rem' }}>(⌘↵)</span>
                                 )}
                             </button>
+
+                            <div className="divider" style={{ margin: '0.25rem 0' }}>OR</div>
+
+                            <button
+                                onClick={handleGenerateRandom}
+                                disabled={isCreating || isJoining || isLoadingRandom}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '0.5rem',
+                                    background: 'linear-gradient(135deg, #ff6b6b 0%, #feca57 50%, #48dbfb 100%)',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    padding: '0.75rem 1rem',
+                                    color: '#000',
+                                    fontWeight: 'bold',
+                                    cursor: 'pointer',
+                                    fontSize: '0.9rem'
+                                }}
+                            >
+                                <Shuffle size={18} />
+                                RANDOM CHARACTER
+                            </button>
+
                             <button
                                 className="text-btn"
                                 onClick={() => {
@@ -382,8 +489,141 @@ export function Lobby({ onJoin, onAdmin, setPlayerId }) {
                                 fontSize: '0.75rem',
                                 textAlign: 'center'
                             }}>
-                                All fields are optional - leave blank for a random character!
+                                Fill fields for custom character, or hit RANDOM for 8 surprises!
                             </div>
+                        </div>
+                    </motion.div>
+                )}
+
+                {mode === 'random_select' && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3 }}
+                    >
+                        <div style={{
+                            textAlign: 'center',
+                            marginBottom: '1rem',
+                            padding: '0.75rem',
+                            background: 'rgba(255,255,255,0.05)',
+                            borderRadius: '8px'
+                        }}>
+                            <div style={{ fontSize: '1.2rem', marginBottom: '0.25rem' }}>
+                                {name.toUpperCase()}
+                            </div>
+                            <div style={{ opacity: 0.7, fontSize: '0.85rem' }}>
+                                {isLoadingRandom ? 'Generating 8 random characters...' : 'Pick your character!'}
+                            </div>
+                        </div>
+
+                        {isLoadingRandom ? (
+                            <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(4, 1fr)',
+                                gap: '0.5rem',
+                                marginBottom: '1rem'
+                            }}>
+                                {[...Array(8)].map((_, idx) => (
+                                    <div
+                                        key={idx}
+                                        style={{
+                                            aspectRatio: '1',
+                                            borderRadius: '8px',
+                                            background: '#1a1a1a',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            border: '2px solid #333'
+                                        }}
+                                    >
+                                        <span className="spinner" style={{ width: '24px', height: '24px' }}></span>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(4, 1fr)',
+                                gap: '0.5rem',
+                                marginBottom: '1rem'
+                            }}>
+                                {randomCharacters.map((char, idx) => (
+                                    <motion.div
+                                        key={idx}
+                                        initial={{ opacity: 0, scale: 0.8 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        transition={{ delay: idx * 0.05 }}
+                                        onClick={() => !isCreating && !isJoining && handleSelectRandomCharacter(idx)}
+                                        style={{
+                                            aspectRatio: '1',
+                                            borderRadius: '8px',
+                                            overflow: 'hidden',
+                                            cursor: (isCreating || isJoining) ? 'wait' : 'pointer',
+                                            border: selectedRandomIdx === idx ? '3px solid var(--primary)' : '2px solid #333',
+                                            transition: 'all 0.2s ease',
+                                            transform: selectedRandomIdx === idx ? 'scale(1.05)' : 'scale(1)',
+                                            position: 'relative'
+                                        }}
+                                    >
+                                        <img
+                                            src={char.url}
+                                            alt={`Random character ${idx + 1}`}
+                                            style={{
+                                                width: '100%',
+                                                height: '100%',
+                                                objectFit: 'cover'
+                                            }}
+                                        />
+                                        {selectedRandomIdx === idx && (
+                                            <div style={{
+                                                position: 'absolute',
+                                                inset: 0,
+                                                background: 'rgba(0, 255, 0, 0.2)',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center'
+                                            }}>
+                                                <span className="spinner" style={{ width: '32px', height: '32px' }}></span>
+                                            </div>
+                                        )}
+                                    </motion.div>
+                                ))}
+                            </div>
+                        )}
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            <button
+                                onClick={handleGenerateRandom}
+                                disabled={isLoadingRandom || isCreating || isJoining}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '0.5rem',
+                                    background: 'transparent',
+                                    border: '1px solid var(--secondary)',
+                                    borderRadius: '8px',
+                                    padding: '0.6rem 1rem',
+                                    color: 'var(--secondary)',
+                                    cursor: (isLoadingRandom || isCreating || isJoining) ? 'not-allowed' : 'pointer',
+                                    opacity: (isLoadingRandom || isCreating || isJoining) ? 0.5 : 1,
+                                    fontSize: '0.85rem'
+                                }}
+                            >
+                                <RefreshCw size={14} className={isLoadingRandom ? 'spinning' : ''} />
+                                {isLoadingRandom ? 'GENERATING...' : 'REGENERATE ALL'}
+                            </button>
+                            <button
+                                className="text-btn"
+                                onClick={() => {
+                                    setMode('character');
+                                    setRandomCharacters([]);
+                                    setSelectedRandomIdx(null);
+                                }}
+                                disabled={isCreating || isJoining}
+                            >
+                                Back to custom
+                            </button>
                         </div>
                     </motion.div>
                 )}
@@ -416,7 +656,7 @@ export function Lobby({ onJoin, onAdmin, setPlayerId }) {
                             height: '200px',
                             borderRadius: '12px',
                             overflow: 'hidden',
-                            margin: '0 auto 1.5rem',
+                            margin: '0 auto 1rem',
                             background: '#1a1a1a',
                             display: 'flex',
                             alignItems: 'center',
@@ -440,6 +680,54 @@ export function Lobby({ onJoin, onAdmin, setPlayerId }) {
                                 </div>
                             )}
                         </div>
+
+                        {/* Character Traits Display */}
+                        {previewData.traits && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.2 }}
+                                style={{
+                                    marginBottom: '1rem',
+                                    padding: '0.75rem',
+                                    background: 'rgba(255,255,255,0.03)',
+                                    borderRadius: '8px',
+                                    textAlign: 'left',
+                                    fontSize: '0.75rem'
+                                }}
+                            >
+                                {previewData.traits.look && (
+                                    <div style={{ marginBottom: '0.4rem' }}>
+                                        <span style={{ color: '#888', marginRight: '0.5rem' }}>VIBE:</span>
+                                        <span style={{ color: '#fff' }}>{previewData.traits.look}</span>
+                                    </div>
+                                )}
+                                {previewData.traits.weapon && (
+                                    <div style={{ marginBottom: '0.4rem' }}>
+                                        <span style={{ color: '#888', marginRight: '0.5rem' }}>WEAPON:</span>
+                                        <span style={{ color: '#ff6b6b' }}>{previewData.traits.weapon}</span>
+                                    </div>
+                                )}
+                                {previewData.traits.talent && (
+                                    <div style={{ marginBottom: '0.4rem' }}>
+                                        <span style={{ color: '#888', marginRight: '0.5rem' }}>TALENT:</span>
+                                        <span style={{ color: '#48dbfb' }}>{previewData.traits.talent}</span>
+                                    </div>
+                                )}
+                                {previewData.traits.flaw && (
+                                    <div style={{ marginBottom: '0.4rem' }}>
+                                        <span style={{ color: '#888', marginRight: '0.5rem' }}>FLAW:</span>
+                                        <span style={{ color: '#feca57' }}>{previewData.traits.flaw}</span>
+                                    </div>
+                                )}
+                                {previewData.traits.catchphrase && (
+                                    <div>
+                                        <span style={{ color: '#888', marginRight: '0.5rem' }}>SAYS:</span>
+                                        <span style={{ color: '#0f0', fontStyle: 'italic' }}>"{previewData.traits.catchphrase}"</span>
+                                    </div>
+                                )}
+                            </motion.div>
+                        )}
 
                         {/* Game code display */}
                         <div style={{

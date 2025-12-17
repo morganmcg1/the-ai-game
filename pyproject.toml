@@ -9,6 +9,7 @@ dependencies = [
     "modal>=1.2.6",
     "openai>=2.13.0",
     "pydantic>=2.12.5",
+    "pyyaml>=6.0.3",
     "requests>=2.32.5",
     "shortuuid>=1.0.13",
 ]

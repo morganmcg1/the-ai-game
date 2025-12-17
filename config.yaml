@@ -1,0 +1,173 @@
+# Mas AI Game Configuration
+# This file contains all configurable values for the game
+
+# =============================================================================
+# GAME SETTINGS
+# =============================================================================
+
+game:
+  # Timer for submission phases (in seconds)
+  submission_timeout_seconds: 30
+
+  # Default number of rounds per game
+  default_max_rounds: 5
+
+  # Player heartbeat timeout for inactivity (in seconds)
+  player_inactive_timeout_seconds: 300
+
+# =============================================================================
+# LLM API SETTINGS
+# =============================================================================
+
+llm:
+  # Base URL for OpenRouter API
+  base_url: "https://openrouter.ai/api/v1"
+
+  # Default timeout for LLM API calls (in seconds)
+  default_timeout_seconds: 60
+
+  # Extended timeout for complex operations like ranking (in seconds)
+  extended_timeout_seconds: 90
+
+# =============================================================================
+# LLM MODELS - Granular control per use case
+# =============================================================================
+
+models:
+  # Scenario generation - Creates deadly survival scenarios
+  scenario_generation: "moonshotai/kimi-k2-0905"
+
+  # Strategy judgement - Judges if survival strategies succeed
+  strategy_judgement: "moonshotai/kimi-k2-0905"
+
+  # Ranked mode judgement - Compares and ranks multiple strategies
+  ranked_judgement: "moonshotai/kimi-k2-0905"
+
+  # Sacrifice judgement - Determines if martyr's death was epic
+  sacrifice_judgement: "moonshotai/kimi-k2-0905"
+
+  # Last Stand judgement - Harsh final round judgement
+  last_stand_judgement: "moonshotai/kimi-k2-0905"
+
+  # Revival judgement - Re-judges revived players with teamwork bonus
+  revival_judgement: "moonshotai/kimi-k2-0905"
+
+  # Video script generation - Creates personalized end-game video scripts
+  # Uses a faster/cheaper model since these are simpler prompts
+  video_script_generation: "mistralai/mistral-small-3.1-24b-instruct"
+
+# =============================================================================
+# IMAGE GENERATION SETTINGS
+# =============================================================================
+
+image_generation:
+  # FAL AI base URL
+  fal_base_url: "https://fal.run"
+  fal_queue_url: "https://queue.fal.run"
+
+  # Default image size
+  default_image_size: "landscape_4_3"
+
+  # Number of inference steps (higher = better quality, slower)
+  num_inference_steps: 28
+
+  # Timeout for image generation (in seconds)
+  timeout_seconds: 120
+
+# =============================================================================
+# IMAGE MODELS - Granular control per use case
+# =============================================================================
+
+image_models:
+  # Scenario images - Main scenario artwork
+  scenario_image: "fal-ai/flux/krea"
+
+  # Result images - Player death/survival scenes
+  result_image: "fal-ai/flux/krea"
+
+  # Character avatars - Player profile images
+  character_image: "fal-ai/flux/krea"
+
+  # Trap images - Blind Architect trap designs
+  trap_image: "fal-ai/flux/krea"
+
+  # Cooperative strategy images - Strategy visualization for voting
+  coop_strategy_image: "fal-ai/flux/krea"
+
+  # Timeout failure images - When players don't submit in time
+  timeout_image: "fal-ai/flux/krea"
+
+  # Video base images - Starting frame for end-game videos
+  video_base_image: "fal-ai/flux/krea"
+
+  # Sacrifice result image - Martyr's death scene
+  sacrifice_image: "fal-ai/flux/krea"
+
+  # Revival result image - Revived player's new result
+  revival_image: "fal-ai/flux/krea"
+
+# =============================================================================
+# VIDEO GENERATION SETTINGS
+# =============================================================================
+
+video_generation:
+  # Video model for end-game player videos
+  model: "fal-ai/kling-video/v2.6/pro/image-to-video"
+
+  # Video duration in seconds
+  duration_seconds: 10
+
+  # Polling interval when waiting for video generation (in seconds)
+  poll_interval_seconds: 5
+
+  # Maximum wait time for video generation (in seconds)
+  max_wait_seconds: 450
+
+# =============================================================================
+# SCORING CONFIGURATION
+# =============================================================================
+
+scoring:
+  # Points for surviving a round
+  survival_points: 100
+
+  # Points for winning trap voting (Blind Architect)
+  trap_winner_points: 500
+
+  # Points for epic sacrifice death (martyr)
+  epic_sacrifice_points: 500
+
+  # Points for being saved by epic sacrifice
+  saved_by_sacrifice_points: 100
+
+  # Cooperative mode - random bonus for team survival
+  coop_team_bonus: 200
+
+  # Cooperative mode - penalty for team failure
+  coop_team_penalty: -100
+
+  # Cooperative voting points by rank
+  coop_vote_points:
+    first: 200
+    second: 100
+    middle: 0
+    last: -100
+
+  # Ranked mode points (4+ players)
+  ranked_points_4plus:
+    first: 300
+    second: 200
+    third: 100
+    fourth: 50
+    default: 25
+
+  # Ranked mode points (3 players)
+  ranked_points_3:
+    first: 250
+    second: 125
+    third: 25
+
+  # Ranked mode points (2 players)
+  ranked_points_2:
+    first: 200
+    second: 50
