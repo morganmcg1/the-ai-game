@@ -143,6 +143,54 @@ Generate ONLY the scenario text, nothing else:"""
         print(f"SCENARIO GEN Traceback: {traceback.format_exc()}", flush=True)
         return "ERROR: SCENARIO DATA CORRUPTED. You are suspended in static. Something moves in the noise."
 
+
+def generate_sector_name_llm(scenario: str, style_theme: str) -> str:
+    """Generate a creative 2-3 word sector name based on the scenario and visual style."""
+    client = get_llm_client()
+
+    # Extract just the main style descriptor (before the first comma)
+    style_short = style_theme.split(',')[0].strip() if style_theme else "unknown"
+
+    prompt = f"""You are naming sectors in a corrupted simulation game. Generate a SHORT, CREATIVE sector name (2-3 words max) that combines the visual style with the scenario setting.
+
+Visual Style: {style_short}
+Scenario: {scenario[:200]}
+
+Rules:
+- DO NOT include words like "style", "aesthetic", "sector", "zone", "level"
+- DO NOT just repeat the style name
+- Create something evocative that hints at both the look AND the danger
+- Use dramatic, game-like naming (e.g., "NEON ABYSS", "PIXEL GRAVEYARD", "CHROME NIGHTMARE")
+
+Examples:
+- Style "anime" + jungle scenario → "SAKURA RUINS"
+- Style "pixel art" + hospital scenario → "8-BIT HOSPITAL"
+- Style "noir" + underwater scenario → "SHADOW DEPTHS"
+- Style "vaporwave" + desert scenario → "CHROME MIRAGE"
+
+Output ONLY the sector name in caps, nothing else:"""
+
+    try:
+        completion = client.chat.completions.create(
+            model="moonshotai/kimi-k2-0905",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=20,
+        )
+        result = completion.choices[0].message.content.strip().upper()
+        # Clean up any quotes or extra punctuation
+        result = result.strip('"\'').strip()
+        # Ensure it's not too long
+        if len(result) > 30:
+            result = result[:30]
+        print(f"SECTOR NAME: Generated '{result}'", flush=True)
+        return result
+    except Exception as e:
+        print(f"SECTOR NAME Error: {e}", flush=True)
+        # Fallback: use cleaned style theme
+        fallback = style_short.upper().replace(" STYLE", "").replace(" AESTHETIC", "")
+        return f"{fallback} SECTOR"
+
+
 async def judge_strategy_llm_async(scenario: str, strategy: str):
     """Async version of judge_strategy_llm for parallel execution with simulation flavor."""
     import re
@@ -518,6 +566,7 @@ class Round(BaseModel):
     status: Literal["scenario", "strategy", "judgement", "results", "trap_creation", "trap_voting", "coop_voting", "coop_judgement"] = "scenario"
     architect_id: Optional[str] = None # For blind architect
     style_theme: Optional[str] = None  # Visual style theme for all images in this round
+    sector_name: Optional[str] = None  # Creative name for this level/sector (LLM-generated)
 
     # Narrative system message for this level (displayed in UI)
     system_message: Optional[str] = None
@@ -692,6 +741,7 @@ async def api_start_game(request: Request):
     first_round.scenario_text = scenario_text
     first_round.status = "strategy"  # Both survival and cooperative start with strategy
     first_round.style_theme = random.choice(IMAGE_STYLE_THEMES)
+    first_round.sector_name = generate_sector_name_llm(scenario_text, first_round.style_theme)
     first_round.system_message = get_system_message(1, game.max_rounds, first_round_type)
     game.rounds.append(first_round)
 
@@ -1443,10 +1493,12 @@ async def api_next_round(request: Request):
     if round_type == "blind_architect":
         new_round.status = "trap_creation"
         new_round.scenario_text = "ARCHITECT MODE: Design a deadly scenario for your opponents."
+        new_round.sector_name = "ARCHITECT DOMAIN"  # Fixed name for architect mode
     else:
         # Both survival and cooperative start with strategy phase
         new_round.status = "strategy"
         new_round.scenario_text = generate_scenario_llm(next_idx + 1, game.max_rounds)
+        new_round.sector_name = generate_sector_name_llm(new_round.scenario_text, new_round.style_theme)
 
     save_game(game)
     return {"status": "started_round", "round": next_idx + 1, "type": round_type}

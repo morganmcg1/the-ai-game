@@ -36,7 +36,7 @@ export function ScenarioView({ round, isSpectating, maxRounds }) {
                         letterSpacing: '0.1em'
                     }}>
                         <Terminal size={14} style={{ display: 'inline', marginRight: '0.5rem', verticalAlign: 'middle' }} />
-                        LEVEL {round.number} // {round.style_theme?.split(',')[0]?.toUpperCase() || 'UNKNOWN'} SECTOR
+                        LEVEL {round.number} // {round.sector_name || 'UNKNOWN SECTOR'}
                     </span>
                     <span style={{
                         color: corruptionLevel > 70 ? '#f00' : corruptionLevel > 50 ? '#ff0' : '#0f0',
