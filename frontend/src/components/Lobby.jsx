@@ -1,17 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { api } from '../api';
-import { Play, Users } from 'lucide-react';
 
 export function Lobby({ onJoin, onAdmin, setPlayerId }) {
     const [name, setName] = useState('');
     const [code, setCode] = useState('');
-    const [isJoinMode, setIsJoinMode] = useState(false);
+    const [mode, setMode] = useState('menu'); // 'menu' or 'join'
     const [error, setError] = useState('');
-    const [loading, setLoading] = useState(false);
+    const [isCreating, setIsCreating] = useState(false);
+    const [isJoining, setIsJoining] = useState(false);
 
-    const handleCreate = async () => {
-        setLoading(true);
+    const handleCreate = useCallback(async () => {
+        if (!name.trim()) {
+            setError("Please enter your name");
+            return;
+        }
+        setIsCreating(true);
         setError('');
         try {
             const data = await api.createGame();
@@ -26,13 +30,32 @@ export function Lobby({ onJoin, onAdmin, setPlayerId }) {
             }
         } catch (e) {
             setError('Failed to create game. ' + e.message);
-        } finally {
-            setLoading(false);
+            setIsCreating(false);
         }
-    };
+    }, [name, onAdmin, onJoin, setPlayerId]);
+
+    // Keyboard shortcut: Cmd/Ctrl + Enter to create game
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && mode === 'menu' && !isCreating) {
+                e.preventDefault();
+                handleCreate();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [mode, isCreating, handleCreate]);
 
     const handleJoin = async () => {
-        setLoading(true);
+        if (!name.trim()) {
+            setError("Please enter your name");
+            return;
+        }
+        if (!code) {
+            setError("Enter game code");
+            return;
+        }
+        setIsJoining(true);
         setError('');
         try {
             const data = await api.joinGame(code, name);
@@ -43,78 +66,75 @@ export function Lobby({ onJoin, onAdmin, setPlayerId }) {
             setPlayerId(data.player_id);
         } catch (e) {
             setError('Failed to join game. ' + e.message);
-        } finally {
-            setLoading(false);
+            setIsJoining(false);
         }
     };
 
     return (
-        <div className="card">
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-            >
-                <h1 className="glitch-text" style={{ fontSize: '3rem', textAlign: 'center', marginBottom: '1rem' }}>
-                    DEATH BY AI
-                </h1>
-                <p style={{ textAlign: 'center', color: '#888', marginBottom: '2rem' }}>
-                    Survive the algorithm.
-                </p>
+        <div className="card lobby-card">
+            <h1 className="game-title">DEATH BY AI</h1>
+            {error && <div className="error-banner">{error}</div>}
 
-                {error && (
-                    <div style={{ color: 'var(--danger)', background: 'rgba(255, 46, 46, 0.1)', padding: '10px', borderRadius: '8px', marginBottom: '1rem', textAlign: 'center' }}>
-                        {error}
-                    </div>
+            <div className="input-group" style={{ marginBottom: '2.5rem' }}>
+                <label style={{ marginBottom: '0.5rem', display: 'block' }}>CODENAME</label>
+                <input
+                    type="text"
+                    placeholder="Enter your name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    maxLength={12}
+                    data-testid="name-input"
+                />
+            </div>
+
+            <div className="lobby-actions" style={{ gap: '1.5rem', display: 'flex', flexDirection: 'column' }}>
+                {mode === 'menu' && (
+                    <>
+                        <button
+                            className="primary"
+                            onClick={handleCreate}
+                            disabled={isCreating}
+                            data-testid="create-game-btn"
+                        >
+                            {isCreating ? <span className="spinner"></span> : null}
+                            {isCreating ? "CREATING..." : "NEW GAME"}
+                            {!isCreating && <span style={{ opacity: 0.6, fontSize: '0.75rem', marginLeft: '0.5rem' }}>(⌘↵)</span>}
+                        </button>
+                        <div className="divider" style={{ margin: '0.5rem 0' }}>OR</div>
+                        <button className="secondary" onClick={() => setMode('join')} data-testid="join-mode-btn">
+                            JOIN GAME
+                        </button>
+                    </>
                 )}
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    <input
-                        type="text"
-                        placeholder="Enter your name"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        data-testid="name-input"
-                    />
-
-                    {!isJoinMode ? (
-                        <>
-                            <button
-                                className="primary"
-                                onClick={handleCreate}
-                                disabled={!name || loading}
-                                data-testid="create-game-btn"
-                            >
-                                {loading ? 'Creating...' : 'CREATE NEW GAME'}
-                            </button>
-                            <button className="secondary" onClick={() => setIsJoinMode(true)} data-testid="join-mode-btn">
-                                JOIN EXISTING GAME
-                            </button>
-                        </>
-                    ) : (
-                        <>
+                {mode === 'join' && (
+                    <>
+                        <div className="input-group">
+                            <label>ACCESS CODE</label>
                             <input
                                 type="text"
-                                placeholder="Game Code (4 chars)"
+                                placeholder="ABCD"
                                 value={code}
                                 onChange={(e) => setCode(e.target.value.toUpperCase())}
                                 maxLength={4}
                                 data-testid="code-input"
                             />
-                            <button
-                                className="primary"
-                                onClick={handleJoin}
-                                disabled={!name || !code || loading}
-                                data-testid="join-game-btn"
-                            >
-                                {loading ? 'Joining...' : 'JOIN GAME'}
-                            </button>
-                            <button className="secondary" onClick={() => setIsJoinMode(false)}>
-                                BACK
-                            </button>
-                        </>
-                    )}
-                </div>
-            </motion.div>
+                        </div>
+                        <button
+                            className="primary"
+                            onClick={handleJoin}
+                            disabled={isJoining}
+                            data-testid="join-game-btn"
+                        >
+                            {isJoining ? <span className="spinner"></span> : null}
+                            {isJoining ? "JOINING..." : "ENTER"}
+                        </button>
+                        <button className="text-btn" onClick={() => setMode('menu')}>
+                            Back
+                        </button>
+                    </>
+                )}
+            </div>
         </div>
     );
 }

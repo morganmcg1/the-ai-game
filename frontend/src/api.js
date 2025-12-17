@@ -1,8 +1,5 @@
-const PROJECT_NAME = "weightsandbiases-ai-game--death-by-ai-clone";
-const ENV = "dev";
-const DOMAIN = "modal.run";
-
-const getUrl = (funcName) => `https://${PROJECT_NAME}-${funcName.replace(/_/g, '-')}-${ENV}.${DOMAIN}`;
+// Relative paths for unified FastAPI deployment
+const getUrl = (funcName) => `/api/${funcName}`;
 
 export const api = {
     createGame: async () => {
@@ -30,9 +27,13 @@ export const api = {
         return res.json();
     },
 
-    getGameState: async (code) => {
+    getGameState: async (code, playerId = null) => {
         // GET request, code as query param
-        const res = await fetch(`${getUrl("get_game_state")}?code=${code}`);
+        let url = `${getUrl("get_game_state")}?code=${code}`;
+        if (playerId) {
+            url += `&player_id=${playerId}`;
+        }
+        const res = await fetch(url);
         return res.json();
     },
 
@@ -56,6 +57,15 @@ export const api = {
 
     voteTrap: async (code, voterId, targetId) => {
         const res = await fetch(`${getUrl("vote_trap")}?code=${code}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ voter_id: voterId, target_id: targetId }),
+        });
+        return res.json();
+    },
+
+    voteCoop: async (code, voterId, targetId) => {
+        const res = await fetch(`${getUrl("vote_coop")}?code=${code}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ voter_id: voterId, target_id: targetId }),

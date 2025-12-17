@@ -3,50 +3,60 @@ import { motion } from 'framer-motion';
 
 export function InputView({ round, playerId, onSubmit }) {
     const [strategy, setStrategy] = useState('');
-    const [loading, setLoading] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleSubmit = async () => {
-        if (!strategy.trim()) return;
-        setLoading(true);
-        await onSubmit(strategy);
-        setLoading(false);
+        if (!strategy.trim() || isSubmitting) return;
+        setIsSubmitting(true);
+        try {
+            await onSubmit(strategy);
+            // Don't reset isSubmitting here, wait for parent to unmount us
+            // But if there is an error, we might need to reset.
+            // For now, parent "optimistic" update should hide us instantly.
+        } catch (e) {
+            setIsSubmitting(false);
+            alert("Failed to submit");
+        }
     };
 
-    const hasSubmitted = round.players_submitted?.includes(playerId); // Not strictly in model yet but logic handle outside or via local state if needed. 
-    // For MVP, we pass 'hasSubmitted' prop or rely on parent state. 
-    // Actually, parent App.jsx will handle knowing if we submitted based on player state.
+    const handleKeyDown = (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+            if (strategy.trim() && !isSubmitting) {
+                handleSubmit();
+            }
+        }
+    };
 
     return (
-        <div className="card">
-            <h2 style={{ marginBottom: '1rem', color: 'var(--secondary)' }}>STRATEGY</h2>
-            <p style={{ marginBottom: '1.5rem', opacity: 0.8 }}>
-                How do you survive this scenario?
-            </p>
-
-            <textarea
-                value={strategy}
-                onChange={(e) => setStrategy(e.target.value)}
-                placeholder="I would use the..."
-                style={{
-                    width: '100%',
-                    minHeight: '120px',
-                    background: 'rgba(0,0,0,0.3)',
-                    border: '1px solid var(--secondary)',
-                    color: 'white',
-                    padding: '1rem',
-                    borderRadius: '8px',
-                    marginBottom: '1.5rem',
-                    resize: 'vertical'
-                }}
-            />
-
+        <div className="card input-card">
+            <h3>YOUR STRATEGY</h3>
+            <p className="hint-text">How do you survive this scenario? Be creative...</p>
+            <div className="input-wrapper">
+                <textarea
+                    value={strategy}
+                    onChange={(e) => setStrategy(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="I would use the..."
+                    disabled={isSubmitting}
+                    autoFocus
+                    data-testid="strategy-input"
+                />
+            </div>
             <button
-                className="primary"
+                className="primary full-width"
                 onClick={handleSubmit}
-                disabled={loading || !strategy.trim()}
-                style={{ width: '100%' }}
+                disabled={!strategy.trim() || isSubmitting}
+                data-testid="submit-strategy-btn"
             >
-                {loading ? 'TRANSMITTING...' : 'SUBMIT STRATEGY'}
+                {isSubmitting ? (
+                    <>
+                        <span className="spinner"></span> TRANSMITTING...
+                    </>
+                ) : (
+                    <>
+                        TRANSMIT STRATEGY <span className="shortcut-hint">[⌘↵]</span>
+                    </>
+                )}
             </button>
         </div>
     );
