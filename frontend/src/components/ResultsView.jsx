@@ -198,14 +198,18 @@ export function ResultsView({ round, players }) {
                                     </span>
                                 </div>
 
-                                {/* Reason - compact */}
+                                {/* Judgement reason */}
                                 <div style={{
                                     fontSize: '0.85rem',
-                                    color: '#aaa',
-                                    lineHeight: '1.3'
+                                    color: player.is_alive ? 'var(--success)' : 'var(--danger)',
+                                    lineHeight: '1.3',
+                                    fontStyle: 'italic'
                                 }}>
+                                    <span style={{ fontWeight: 'bold', fontStyle: 'normal' }}>
+                                        {player.is_alive ? 'SURVIVED: ' : 'TERMINATED: '}
+                                    </span>
                                     {player.is_alive
-                                        ? (player.survival_reason || 'Survived!')
+                                        ? (player.survival_reason || 'Made it through!')
                                         : (player.death_reason || 'Did not survive')}
                                 </div>
                             </div>
