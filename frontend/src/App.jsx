@@ -216,10 +216,10 @@ function App() {
   // Ref to track locally submitted strategy to prevent polling from overwriting it (race condition)
   const pendingStrategyRef = useRef(null);
 
-  // Debug menu keyboard shortcut (Ctrl+Shift+D or Cmd+Shift+D)
+  // Debug menu keyboard shortcut (Ctrl+Shift+. or Cmd+Shift+.)
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'd') {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === '.') {
         e.preventDefault();
         setShowDebugMenu(prev => !prev);
       }
@@ -787,6 +787,7 @@ function App() {
             isAdmin={isAdmin}
             onVolunteer={volunteerSacrifice}
             onAdvance={advanceSacrificeVolunteer}
+            config={gameState.config}
           />
         </>
       );

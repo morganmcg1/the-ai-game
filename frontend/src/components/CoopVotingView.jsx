@@ -1,30 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 
 export function CoopVotingView({ round, playerId, onVote, players }) {
-    const existingVote = round.coop_votes?.[playerId] || null;
-    const [selectedId, setSelectedId] = useState(existingVote);
-    const [loading, setLoading] = useState(false);
-    const [hasVoted, setHasVoted] = useState(!!existingVote);
+    const currentVote = round.coop_votes?.[playerId] || null;
+    const [votingFor, setVotingFor] = useState(null); // Track which one is currently being submitted
 
-    // Sync with server state if vote changes externally
-    useEffect(() => {
-        if (existingVote && !hasVoted) {
-            setSelectedId(existingVote);
-            setHasVoted(true);
-        }
-    }, [existingVote, hasVoted]);
-
-    const handleVote = async () => {
-        if (!selectedId || selectedId === playerId) return;
-        setLoading(true);
-        await onVote(selectedId);
-        setHasVoted(true);
-        setLoading(false);
+    const handleVote = async (targetId) => {
+        if (targetId === playerId || targetId === currentVote || votingFor) return;
+        setVotingFor(targetId);
+        await onVote(targetId);
+        setVotingFor(null);
     };
-
-    const hasChangedVote = hasVoted && selectedId !== existingVote;
-    const canSubmit = selectedId && selectedId !== playerId && (!hasVoted || hasChangedVote);
 
     // Check if images are still generating
     const entries = Object.entries(round.strategy_images || {});
@@ -49,21 +35,27 @@ export function CoopVotingView({ round, playerId, onVote, players }) {
                 &gt; Select the protocol most likely to preserve team integrity. Data points at stake.
             </p>
 
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-                gap: '2rem'
-            }}>
-                {entries.map(([pid, url]) => {
+            {/* 2-column grid with centered last card for odd counts */}
+            {(() => {
+                const count = entries.length;
+                const isOdd = count % 2 === 1;
+                const pairedEntries = isOdd ? entries.slice(0, -1) : entries;
+                const lastEntry = isOdd ? entries[entries.length - 1] : null;
+
+                const renderCard = ([pid, url], index) => {
                     const isOwnStrategy = pid === playerId;
+                    const isCurrentVote = currentVote === pid;
+                    const isVoting = votingFor === pid;
+                    const canClick = !isOwnStrategy && !isVoting && !isCurrentVote;
+
                     return (
                         <motion.div
                             key={pid}
-                            whileHover={!isOwnStrategy ? { scale: 1.05 } : {}}
-                            onClick={() => !isOwnStrategy && setSelectedId(pid)}
+                            whileHover={canClick ? { scale: 1.03 } : {}}
+                            onClick={() => canClick && handleVote(pid)}
                             style={{
-                                cursor: isOwnStrategy ? 'not-allowed' : 'pointer',
-                                border: selectedId === pid ? '4px solid var(--accent)' : '1px solid transparent',
+                                cursor: isOwnStrategy ? 'not-allowed' : (canClick ? 'pointer' : 'default'),
+                                border: isCurrentVote ? '4px solid var(--success)' : '2px solid #333',
                                 borderRadius: '12px',
                                 overflow: 'hidden',
                                 position: 'relative',
@@ -74,57 +66,81 @@ export function CoopVotingView({ round, playerId, onVote, players }) {
                             {isOwnStrategy && (
                                 <div style={{
                                     position: 'absolute',
-                                    top: 5,
-                                    right: 5,
-                                    background: 'rgba(0,0,0,0.7)',
-                                    padding: '4px 8px',
-                                    borderRadius: '4px',
-                                    fontSize: '10px',
-                                    color: 'var(--accent)'
+                                    top: 8,
+                                    right: 8,
+                                    background: 'rgba(0,0,0,0.8)',
+                                    padding: '6px 10px',
+                                    borderRadius: '6px',
+                                    fontSize: '11px',
+                                    color: 'var(--accent)',
+                                    fontWeight: 'bold'
                                 }}>
                                     YOUR STRATEGY
                                 </div>
                             )}
-                            {existingVote === pid && (
+                            {isCurrentVote && (
                                 <div style={{
                                     position: 'absolute',
-                                    top: 5,
-                                    left: 5,
+                                    top: 8,
+                                    left: 8,
                                     background: 'var(--success)',
-                                    padding: '4px 8px',
-                                    borderRadius: '4px',
-                                    fontSize: '10px',
+                                    padding: '6px 10px',
+                                    borderRadius: '6px',
+                                    fontSize: '11px',
                                     color: 'black',
                                     fontWeight: 'bold'
                                 }}>
                                     YOUR VOTE
                                 </div>
                             )}
+                            {isVoting && (
+                                <div style={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    background: 'rgba(0,0,0,0.5)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}>
+                                    <span className="spinner" style={{ width: '32px', height: '32px' }}></span>
+                                </div>
+                            )}
                         </motion.div>
                     );
-                })}
-            </div>
+                };
 
-            <div style={{ textAlign: 'center', marginTop: '2rem' }}>
-                {hasVoted && !hasChangedVote && (
-                    <p style={{ color: 'var(--success)', marginBottom: '1rem', fontFamily: 'monospace' }}>
-                        &gt; Selection registered. Select a different protocol to modify.
-                    </p>
-                )}
-                <button
-                    className="primary"
-                    onClick={handleVote}
-                    disabled={!canSubmit || loading}
-                    style={{
-                        backgroundColor: hasChangedVote ? 'var(--secondary)' : 'var(--accent)',
-                        color: 'black',
-                        padding: '16px 32px',
-                        fontSize: '1.2rem'
-                    }}
-                >
-                    {loading ? 'SYNCING...' : hasChangedVote ? 'UPDATE SELECTION' : 'CONFIRM SELECTION'}
-                </button>
-            </div>
+                return (
+                    <>
+                        {/* 2-column grid for paired entries */}
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(2, 1fr)',
+                            gap: '1.5rem'
+                        }}>
+                            {pairedEntries.map((entry, index) => renderCard(entry, index))}
+                        </div>
+
+                        {/* Centered last card for odd counts */}
+                        {lastEntry && (
+                            <div style={{
+                                display: 'flex',
+                                justifyContent: 'center',
+                                marginTop: '1.5rem'
+                            }}>
+                                <div style={{ width: 'calc(50% - 0.75rem)' }}>
+                                    {renderCard(lastEntry, entries.length - 1)}
+                                </div>
+                            </div>
+                        )}
+                    </>
+                );
+            })()}
+
+            {currentVote && (
+                <p style={{ textAlign: 'center', marginTop: '1.5rem', color: 'var(--success)', fontFamily: 'monospace' }}>
+                    &gt; Vote registered. Click another protocol to change your vote.
+                </p>
+            )}
         </div>
     );
 }

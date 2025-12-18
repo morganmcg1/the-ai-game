@@ -35,8 +35,6 @@ export function RevivalVotingView({ round, playerId, players, isAdmin, onVote, o
     });
 
     const totalVotes = Object.keys(round.revival_votes || {}).length;
-    const isUnanimous = totalVotes === survivors.length &&
-        new Set(Object.values(round.revival_votes || {})).size === 1;
 
     // Dead player view
     if (!isSurvivor) {
@@ -166,7 +164,6 @@ export function RevivalVotingView({ round, playerId, players, isAdmin, onVote, o
             }}>
                 {deadPlayers.map((player) => {
                     const isSelected = selectedId === player.id;
-                    const voteCount = voteCounts[player.id] || 0;
 
                     return (
                         <motion.button
@@ -179,43 +176,86 @@ export function RevivalVotingView({ round, playerId, players, isAdmin, onVote, o
                                 position: 'relative',
                                 padding: '1rem',
                                 background: isSelected
-                                    ? 'rgba(0, 255, 0, 0.2)'
-                                    : 'rgba(0, 0, 0, 0.3)',
+                                    ? 'rgba(0, 255, 0, 0.15)'
+                                    : 'rgba(255, 0, 0, 0.05)',
                                 border: isSelected
                                     ? '2px solid #0f0'
-                                    : '1px solid rgba(255, 255, 255, 0.2)',
+                                    : '2px solid rgba(255, 68, 68, 0.5)',
                                 borderRadius: '8px',
                                 cursor: 'pointer',
-                                textAlign: 'left'
+                                textAlign: 'left',
+                                boxShadow: isSelected
+                                    ? '0 0 15px rgba(0, 255, 0, 0.3)'
+                                    : '0 0 10px rgba(255, 0, 0, 0.1)'
                             }}
                         >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-                                {player.character_image_url ? (
-                                    <img
-                                        src={player.character_image_url}
-                                        alt={player.name}
-                                        style={{
+                            {/* Deceased badge */}
+                            <div style={{
+                                position: 'absolute',
+                                top: '-8px',
+                                right: '10px',
+                                background: '#ff4444',
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                fontSize: '10px',
+                                color: 'white',
+                                fontFamily: 'monospace',
+                                fontWeight: 'bold',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                            }}>
+                                <Skull size={10} />
+                                DECEASED
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem', marginTop: '0.25rem' }}>
+                                {/* Avatar with skull overlay */}
+                                <div style={{ position: 'relative' }}>
+                                    {player.character_image_url ? (
+                                        <img
+                                            src={player.character_image_url}
+                                            alt={player.name}
+                                            style={{
+                                                width: '50px',
+                                                height: '50px',
+                                                borderRadius: '50%',
+                                                objectFit: 'cover',
+                                                border: isSelected ? '2px solid #0f0' : '2px solid #ff4444',
+                                                filter: isSelected ? 'none' : 'grayscale(30%)'
+                                            }}
+                                        />
+                                    ) : (
+                                        <div style={{
                                             width: '50px',
                                             height: '50px',
                                             borderRadius: '50%',
-                                            objectFit: 'cover',
-                                            border: isSelected ? '2px solid #0f0' : '2px solid #666',
-                                            opacity: 0.8
-                                        }}
-                                    />
-                                ) : (
-                                    <div style={{
-                                        width: '50px',
-                                        height: '50px',
-                                        borderRadius: '50%',
-                                        background: 'rgba(100, 100, 100, 0.3)',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center'
-                                    }}>
-                                        <User size={24} color="#666" />
-                                    </div>
-                                )}
+                                            background: 'rgba(255, 68, 68, 0.2)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            border: isSelected ? '2px solid #0f0' : '2px solid #ff4444'
+                                        }}>
+                                            <Skull size={24} color="#ff4444" />
+                                        </div>
+                                    )}
+                                    {/* Small skull indicator on avatar */}
+                                    {!isSelected && player.character_image_url && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            bottom: '-2px',
+                                            right: '-2px',
+                                            background: '#ff4444',
+                                            borderRadius: '50%',
+                                            padding: '3px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center'
+                                        }}>
+                                            <Skull size={10} color="white" />
+                                        </div>
+                                    )}
+                                </div>
                                 <div>
                                     <span style={{
                                         fontFamily: 'monospace',
@@ -226,12 +266,11 @@ export function RevivalVotingView({ round, playerId, players, isAdmin, onVote, o
                                         {player.name}
                                     </span>
                                     <span style={{
-                                        fontSize: '0.75rem',
-                                        color: '#666',
+                                        fontSize: '0.7rem',
+                                        color: isSelected ? 'rgba(0, 255, 0, 0.7)' : '#ff6b6b',
                                         fontFamily: 'monospace'
                                     }}>
-                                        <Skull size={12} style={{ marginRight: '0.25rem' }} />
-                                        DECEASED
+                                        {isSelected ? '✓ Selected for revival' : 'Click to vote'}
                                     </span>
                                 </div>
                             </div>
@@ -263,55 +302,48 @@ export function RevivalVotingView({ round, playerId, players, isAdmin, onVote, o
                                 </p>
                             )}
 
-                            {/* Vote indicator */}
-                            <div style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                marginTop: '0.5rem'
-                            }}>
-                                <span style={{
-                                    fontSize: '0.75rem',
-                                    color: voteCount === survivors.length ? '#0f0' : 'rgba(255, 255, 255, 0.5)',
-                                    fontFamily: 'monospace'
+                            {/* Selection indicator - no vote counts shown to keep voting secret */}
+                            {isSelected && (
+                                <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'flex-end',
+                                    alignItems: 'center',
+                                    marginTop: '0.5rem'
                                 }}>
-                                    {voteCount} / {survivors.length} votes
-                                </span>
-                                {isSelected && (
                                     <Check size={16} color="#0f0" />
-                                )}
-                            </div>
+                                </div>
+                            )}
                         </motion.button>
                     );
                 })}
             </div>
 
-            {/* Status */}
+            {/* Status - don't reveal vote results to keep it secret */}
             <div style={{
                 fontFamily: 'monospace',
                 fontSize: '0.85rem',
                 textAlign: 'center',
                 marginBottom: '1rem'
             }}>
-                {isUnanimous ? (
-                    <span style={{ color: '#0f0' }}>
+                {totalVotes === survivors.length ? (
+                    <span style={{ color: '#ffd700' }}>
                         <Check size={16} style={{ marginRight: '0.5rem' }} />
-                        UNANIMOUS! Ready to revive {players[Object.values(round.revival_votes)[0]]?.name}
+                        All votes cast - processing result...
                     </span>
-                ) : totalVotes === survivors.length ? (
-                    <span style={{ color: '#ff6b6b' }}>
-                        <AlertTriangle size={16} style={{ marginRight: '0.5rem' }} />
-                        Votes split - no unanimous agreement
+                ) : selectedId ? (
+                    <span style={{ color: 'rgba(0, 255, 0, 0.7)' }}>
+                        <Check size={16} style={{ marginRight: '0.5rem' }} />
+                        Vote recorded ({totalVotes}/{survivors.length} votes cast)
                     </span>
                 ) : (
                     <span style={{ color: 'rgba(255, 255, 255, 0.6)' }}>
-                        Waiting for all survivors to vote ({totalVotes}/{survivors.length})
+                        Select a fallen player to revive ({totalVotes}/{survivors.length} votes cast)
                     </span>
                 )}
             </div>
 
-            {/* Admin advance button */}
-            {isAdmin && (
+            {/* Admin advance button - only shown as fallback, game auto-advances when all vote */}
+            {isAdmin && totalVotes < survivors.length && (
                 <motion.button
                     onClick={handleAdvance}
                     disabled={loading}
@@ -319,30 +351,27 @@ export function RevivalVotingView({ round, playerId, players, isAdmin, onVote, o
                     whileTap={{ scale: 0.98 }}
                     style={{
                         width: '100%',
-                        backgroundColor: isUnanimous ? '#0f0' : 'rgba(255, 255, 255, 0.1)',
-                        color: isUnanimous ? 'black' : 'white',
+                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                        color: 'white',
                         fontFamily: 'monospace',
                         padding: '0.75rem',
-                        border: isUnanimous ? 'none' : '1px solid rgba(255, 255, 255, 0.3)',
+                        border: '1px solid rgba(255, 255, 255, 0.3)',
                         borderRadius: '8px',
                         cursor: 'pointer'
                     }}
                 >
-                    {loading ? 'PROCESSING...' : isUnanimous
-                        ? 'EXECUTE REVIVAL'
-                        : 'SKIP REVIVAL (No Consensus)'
-                    }
+                    {loading ? 'PROCESSING...' : 'SKIP REVIVAL (Force Proceed)'}
                 </motion.button>
             )}
 
-            {!isAdmin && (
+            {!isAdmin && !selectedId && (
                 <p style={{
                     fontFamily: 'monospace',
                     fontSize: '0.8rem',
                     opacity: 0.5,
                     textAlign: 'center'
                 }}>
-                    Waiting for admin to proceed...
+                    Cast your vote above
                 </p>
             )}
         </div>

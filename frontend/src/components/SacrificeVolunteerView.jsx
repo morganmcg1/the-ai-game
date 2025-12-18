@@ -1,12 +1,51 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, Skull, Users } from 'lucide-react';
+import { Heart, Skull, Users, Clock } from 'lucide-react';
 
-export function SacrificeVolunteerView({ round, playerId, players, isAdmin, onVolunteer, onAdvance }) {
+const DEFAULT_VOLUNTEER_TIMEOUT = 30;
+
+export function SacrificeVolunteerView({ round, playerId, players, isAdmin, onVolunteer, onAdvance, config = {} }) {
+    const timeoutSeconds = config.volunteer_timeout_seconds || DEFAULT_VOLUNTEER_TIMEOUT;
     const [loading, setLoading] = useState(false);
     const [hasVolunteered, setHasVolunteered] = useState(
         round.sacrifice_volunteers && round.sacrifice_volunteers[playerId]
     );
+    const [timeLeft, setTimeLeft] = useState(timeoutSeconds);
+    const hasAutoAdvanced = useRef(false);
+
+    // Countdown timer effect
+    useEffect(() => {
+        if (!round.submission_start_time) return;
+
+        const updateTimer = () => {
+            const elapsed = (Date.now() / 1000) - round.submission_start_time;
+            const remaining = Math.max(0, timeoutSeconds - elapsed);
+            setTimeLeft(Math.ceil(remaining));
+        };
+
+        updateTimer(); // Initial update
+        const interval = setInterval(updateTimer, 100);
+        return () => clearInterval(interval);
+    }, [round.submission_start_time, timeoutSeconds]);
+
+    // Auto-advance when timer expires (admin only)
+    useEffect(() => {
+        if (timeLeft <= 0 && isAdmin && !loading && !hasAutoAdvanced.current) {
+            hasAutoAdvanced.current = true;
+            handleAdvance();
+        }
+    }, [timeLeft, isAdmin, loading]);
+
+    // Timer color based on urgency
+    const getTimerColor = () => {
+        if (timeLeft <= 5) return '#ff0000';
+        if (timeLeft <= 10) return '#ff6600';
+        if (timeLeft <= 15) return '#ffcc00';
+        return 'var(--primary)';
+    };
+
+    const timerColor = getTimerColor();
+    const isUrgent = timeLeft <= 10;
 
     const handleVolunteer = useCallback(async () => {
         if (hasVolunteered || loading) return;
@@ -32,6 +71,41 @@ export function SacrificeVolunteerView({ round, playerId, players, isAdmin, onVo
 
     return (
         <div className="card">
+            {/* Timer display */}
+            <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: '0.5rem',
+                marginBottom: '1rem',
+                padding: '0.75rem',
+                background: `rgba(${timeLeft <= 10 ? '255, 0, 0' : '255, 68, 68'}, 0.1)`,
+                border: `2px solid ${timerColor}`,
+                borderRadius: '8px',
+                animation: isUrgent ? 'pulse 0.5s infinite' : 'none'
+            }}>
+                <Clock size={20} color={timerColor} />
+                <span style={{
+                    fontFamily: 'monospace',
+                    fontSize: '1.5rem',
+                    fontWeight: 'bold',
+                    color: timerColor,
+                    textShadow: isUrgent ? `0 0 10px ${timerColor}` : 'none'
+                }}>
+                    {timeLeft}s
+                </span>
+                {timeLeft <= 10 && (
+                    <span style={{
+                        fontFamily: 'monospace',
+                        fontSize: '0.8rem',
+                        color: timerColor,
+                        marginLeft: '0.5rem'
+                    }}>
+                        DECIDE NOW!
+                    </span>
+                )}
+            </div>
+
             {/* Header with dramatic flair */}
             <div style={{
                 fontFamily: 'monospace',

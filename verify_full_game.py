@@ -4,7 +4,7 @@ import sys
 import json
 
 # Constants
-PROJECT_NAME = "weightsandbiases-ai-game--death-by-ai-clone"
+PROJECT_NAME = "weightsandbiases-ai-game--mas-ai"
 ENV = "dev"
 DOMAIN = "modal.run"
 

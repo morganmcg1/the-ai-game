@@ -1,7 +1,64 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { RefreshCw, Shuffle } from 'lucide-react';
+import { RefreshCw, Shuffle, Copy, Check } from 'lucide-react';
 import { api } from '../api';
+
+// Game code display component with copy button
+function GameCodeDisplay({ code }) {
+    const [copied, setCopied] = useState(false);
+
+    const handleCopy = async () => {
+        try {
+            await navigator.clipboard.writeText(code);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch (err) {
+            console.error('Failed to copy:', err);
+        }
+    };
+
+    return (
+        <div style={{
+            marginBottom: '1.5rem',
+            padding: '0.75rem',
+            background: 'rgba(255,255,255,0.05)',
+            borderRadius: '8px'
+        }}>
+            <div style={{ fontSize: '0.8rem', opacity: 0.6, marginBottom: '0.25rem' }}>GAME CODE</div>
+            <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.75rem'
+            }}>
+                <div style={{ fontSize: '1.5rem', fontWeight: 'bold', letterSpacing: '0.2em' }}>
+                    {code}
+                </div>
+                <button
+                    onClick={handleCopy}
+                    style={{
+                        background: copied ? 'var(--success)' : 'rgba(255,255,255,0.1)',
+                        border: 'none',
+                        borderRadius: '6px',
+                        padding: '0.5rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'all 0.2s ease'
+                    }}
+                    title="Copy game code"
+                >
+                    {copied ? (
+                        <Check size={18} color="#000" />
+                    ) : (
+                        <Copy size={18} color="#fff" />
+                    )}
+                </button>
+            </div>
+        </div>
+    );
+}
 
 // 5 character description fields
 const CHARACTER_FIELDS = [
@@ -310,7 +367,7 @@ export function Lobby({ onJoin, onAdmin, setPlayerId }) {
 
     return (
         <div className="card lobby-card">
-            <h1 className="game-title">DEATH BY AI</h1>
+            <h1 className="game-title">SurvAIve</h1>
 
             {/* Simulation intro tagline */}
             <p style={{
@@ -354,7 +411,6 @@ export function Lobby({ onJoin, onAdmin, setPlayerId }) {
                             NEW GAME
                             <span style={{ opacity: 0.6, fontSize: '0.75rem', marginLeft: '0.5rem' }}>(⌘↵)</span>
                         </button>
-                        <div className="divider" style={{ margin: '0.5rem 0' }}>OR</div>
                         <button className="secondary" onClick={() => setMode('join')} data-testid="join-mode-btn">
                             JOIN GAME
                         </button>
@@ -729,43 +785,35 @@ export function Lobby({ onJoin, onAdmin, setPlayerId }) {
                             </motion.div>
                         )}
 
-                        {/* Game code display */}
-                        <div style={{
-                            marginBottom: '1.5rem',
-                            padding: '0.75rem',
-                            background: 'rgba(255,255,255,0.05)',
-                            borderRadius: '8px'
-                        }}>
-                            <div style={{ fontSize: '0.8rem', opacity: 0.6, marginBottom: '0.25rem' }}>GAME CODE</div>
-                            <div style={{ fontSize: '1.5rem', fontWeight: 'bold', letterSpacing: '0.2em' }}>
-                                {previewData.gameCode}
-                            </div>
-                        </div>
+                        {/* Regenerate button - moved above game code */}
+                        <button
+                            onClick={handleRegenerate}
+                            disabled={!previewData.characterImageUrl || isRegenerating}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '0.5rem',
+                                background: 'transparent',
+                                border: '1px solid var(--secondary)',
+                                borderRadius: '8px',
+                                padding: '0.75rem 1rem',
+                                color: 'var(--secondary)',
+                                cursor: previewData.characterImageUrl && !isRegenerating ? 'pointer' : 'not-allowed',
+                                opacity: previewData.characterImageUrl && !isRegenerating ? 1 : 0.5,
+                                fontSize: '0.9rem',
+                                marginBottom: '1rem',
+                                width: '100%'
+                            }}
+                        >
+                            <RefreshCw size={16} className={isRegenerating ? 'spinning' : ''} />
+                            {isRegenerating ? 'REGENERATING...' : 'TRY NEW LOOK'}
+                        </button>
+
+                        {/* Game code display with copy button */}
+                        <GameCodeDisplay code={previewData.gameCode} />
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                            {/* Regenerate button */}
-                            <button
-                                onClick={handleRegenerate}
-                                disabled={!previewData.characterImageUrl || isRegenerating}
-                                style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '0.5rem',
-                                    background: 'transparent',
-                                    border: '1px solid var(--secondary)',
-                                    borderRadius: '8px',
-                                    padding: '0.75rem 1rem',
-                                    color: 'var(--secondary)',
-                                    cursor: previewData.characterImageUrl && !isRegenerating ? 'pointer' : 'not-allowed',
-                                    opacity: previewData.characterImageUrl && !isRegenerating ? 1 : 0.5,
-                                    fontSize: '0.9rem'
-                                }}
-                            >
-                                <RefreshCw size={16} className={isRegenerating ? 'spinning' : ''} />
-                                {isRegenerating ? 'REGENERATING...' : 'TRY NEW LOOK'}
-                            </button>
-
                             {/* Continue button */}
                             <button
                                 className="primary"
@@ -780,14 +828,6 @@ export function Lobby({ onJoin, onAdmin, setPlayerId }) {
                                     <span style={{ opacity: 0.6, fontSize: '0.75rem', marginLeft: '0.5rem' }}>(⌘↵)</span>
                                 )}
                             </button>
-
-                            <div style={{
-                                opacity: 0.5,
-                                fontSize: '0.75rem',
-                                fontFamily: 'monospace'
-                            }}>
-                                Don't like it? Regenerate for a different art style!
-                            </div>
                         </div>
                     </motion.div>
                 )}

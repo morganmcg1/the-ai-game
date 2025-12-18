@@ -254,6 +254,21 @@ export const DebugMenu = ({ isOpen, onClose, gameCode, playerId, onSkip }) => {
           </span>
         </div>
 
+        {/* No Game Warning */}
+        {!gameCode && (
+          <div style={{
+            marginBottom: '1rem',
+            padding: '0.75rem',
+            background: 'rgba(255,165,0,0.1)',
+            border: '1px solid #f90',
+            borderRadius: '6px',
+            color: '#fa0',
+            fontSize: '0.85rem',
+          }}>
+            ⚠️ Create or join a game first, then reopen this menu to skip to a state.
+          </div>
+        )}
+
         {/* Error Display */}
         {error && (
           <div style={{
@@ -326,7 +341,7 @@ export const DebugMenu = ({ isOpen, onClose, gameCode, playerId, onSkip }) => {
           color: '#666',
         }}>
           <p style={{ margin: '0 0 0.5rem 0' }}>
-            <strong style={{ color: '#888' }}>Keyboard Shortcut:</strong> Ctrl+Shift+D (or Cmd+Shift+D on Mac)
+            <strong style={{ color: '#888' }}>Keyboard Shortcut:</strong> Ctrl+Shift+. or Cmd+Shift+.
           </p>
           <p style={{ margin: 0 }}>
             This menu sets up the game state with dummy data so you can test specific screens without playing through the whole game.

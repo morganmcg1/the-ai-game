@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Cyberpunk skull with glitch effect -->
+  <path fill="#ff0055" d="M14 2C7 2 2 7 2 13c0 4 2 7 5 9v6c0 1 1 2 2 2h10c1 0 2-1 2-2v-6c3-2 5-5 5-9 0-6-5-11-12-11z"/>
+  <path fill="#0099ff" d="M18 2C11 2 6 7 6 13c0 4 2 7 5 9v6c0 1 1 2 2 2h10c1 0 2-1 2-2v-6c3-2 5-5 5-9 0-6-5-11-12-11z"/>
+  <path fill="#ffffff" d="M16 2C9 2 4 7 4 13c0 4 2 7 5 9v6c0 1 1 2 2 2h10c1 0 2-1 2-2v-6c3-2 5-5 5-9 0-6-5-11-12-11z"/>
+  <!-- Red eye -->
+  <circle fill="#ff0055" cx="11" cy="13" r="3"/>
+  <!-- Blue eye -->
+  <circle fill="#0099ff" cx="21" cy="13" r="3"/>
+  <rect fill="#1a1a1a" x="13" y="19" width="6" height="2"/>
+  <rect fill="#1a1a1a" x="12" y="22" width="2" height="6"/>
+  <rect fill="#1a1a1a" x="18" y="22" width="2" height="6"/>
+</svg>

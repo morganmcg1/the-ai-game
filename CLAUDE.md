@@ -1,4 +1,4 @@
-# Project: Mas AI
+# Project: SurvAIve
 
 A multiplayer survival party game where players respond to AI-generated deadly scenarios. An AI judge evaluates survival strategies and determines who lives or dies. Features AI-generated scenario images, death scenes, character avatars, and personalized end-game videos.
 
@@ -185,6 +185,7 @@ System messages displayed based on round progression:
 | `SacrificeSubmissionView.jsx` | Martyr death speech submission |
 | `RevivalVotingView.jsx` | Last Stand revival voting |
 | `ResultsView.jsx` | Round results display + leaderboard |
+| `DebugMenu.jsx` | Debug menu overlay (Ctrl/Cmd+Shift+. to open) |
 | `index.css` | Global styles (neon/dark theme) |
 
 **Key Frontend Patterns:**
@@ -205,6 +206,67 @@ System messages displayed based on round progression:
 - **LLM (Video Scripts)**: Mistral Small (`mistralai/mistral-small-3.1-24b-instruct`)
 - **Images**: FAL AI flux/krea model
 - **Videos**: FAL AI Kling 2.6 Pro (`kling-video/v2.6/pro/image-to-video`)
+
+### Centralized Prompts (`backend/prompts.py`)
+
+All LLM prompts are centralized in `prompts.py` for easy editing. Prompts use `{{variable}}` placeholders.
+
+**Usage:**
+```python
+import prompts
+
+prompt = prompts.format_prompt(
+    prompts.STRATEGY_JUDGEMENT,
+    scenario="A monster attacks...",
+    strategy="I run away!"
+)
+```
+
+**Available Prompts:**
+
+| Prompt | Purpose |
+|--------|---------|
+| `SCENARIO_GENERATION` | Generate deadly survival scenarios |
+| `LAST_STAND_SCENARIO` | Generate Evil Santa final boss scenario |
+| `STRATEGY_JUDGEMENT` | Judge if survival strategies work |
+| `RANKED_JUDGEMENT` | Rank all strategies comparatively |
+| `SACRIFICE_JUDGEMENT` | Judge how epic a martyr's death was |
+| `LAST_STAND_JUDGEMENT` | Harsh Evil Santa judgement (~20-30% survival) |
+| `REVIVAL_JUDGEMENT` | Re-judge revived player with leniency |
+| `VIDEO_SCRIPT_GENERATION` | Generate personalized end-game video scripts |
+| `CHARACTER_IMAGE` | Full character image prompt with action scene |
+| `CHARACTER_SIMPLE` | Simple character portrait prompt |
+
+**Image Prompts:**
+- `TIMEOUT_IMAGE_OPTIONS` - List of timeout failure scene descriptions
+- `TIMEOUT_IMAGE_SUFFIX` - Suffix added to timeout prompts
+- `COOP_STRATEGY_IMAGE` - Strategy illustration template
+- `VIDEO_BASE_IMAGE` - Video base image template
+
+**Fallback Responses:**
+- `FALLBACK_SCENARIO`, `FALLBACK_LAST_STAND_SCENARIO`
+- `FALLBACK_STRATEGY_JUDGEMENT`, `FALLBACK_SACRIFICE_JUDGEMENT`
+- `FALLBACK_LAST_STAND_JUDGEMENT`, `FALLBACK_REVIVAL_JUDGEMENT`
+- `FALLBACK_RANKED_COMMENTARY`, `FALLBACK_RANKED_VISUAL`
+- `FALLBACK_VIDEO_SCRIPT`
+
+**Helper Functions:**
+- `format_prompt(template, **kwargs)` - Replace `{{var}}` placeholders
+- `build_video_context(player_name, rank, total_players, score)` - Returns `(context, tone)` for video scripts
+
+### Configuration (`config.yaml`)
+
+All configurable values are centralized in `config.yaml`:
+
+| Section | Settings |
+|---------|----------|
+| `game` | Timers, round count, heartbeat timeout |
+| `llm` | API URLs, timeouts |
+| `models` | LLM model names per use case |
+| `image_generation` | FAL settings, image size, inference steps |
+| `image_models` | Image model per use case |
+| `video_generation` | Video model, duration, polling settings |
+| `scoring` | Points for survival, sacrifice, coop, ranked |
 
 ---
 
@@ -327,6 +389,22 @@ games = modal.Dict.from_name("mas-ai-games", create_if_missing=True)
 
 ## Debugging
 
+### Debug Menu (Keyboard Shortcut)
+
+Press **`Ctrl+Shift+.`** or **`Cmd+Shift+.`** to open the debug menu. This allows you to:
+
+- **Skip to any game state**: Lobby, Playing, or Finished
+- **Jump to specific round types**: Survival, Blind Architect, Cooperative, Sacrifice, Last Stand, Ranked
+- **Jump to specific round phases**: scenario, strategy, judgement, results, voting phases, etc.
+- **Set round number**: Test any round 1-10
+- **Add dummy players**: Spawn 0-10 test bots with placeholder avatars
+
+The debug menu automatically sets up all required game state (players, rounds, metadata) so screens render correctly without playing through the whole game. Dummy players use a placeholder avatar image.
+
+**Backend endpoint:** `/api/debug_skip_to_state`
+
+### Modal Logs
+
 You can check the deployments logs on Modal to help with deployment issues like console errors or hung processes due to race conditions.
 
 ## Known Issues & Pitfalls
@@ -350,6 +428,35 @@ save_game(game)  # Save once at the end
 **Problem:** After submitting data, the next poll response might arrive before the server has processed/saved the submission.
 
 **Solution:** Use optimistic updates with refs to track pending operations. See `App.jsx` for the `pendingStrategyRef` implementation.
+
+### Timeout Handling - Game Hangs
+
+**Problem:** When a phase times out, if the code doesn't explicitly advance `current_round.status`, the game hangs indefinitely. This has affected multiple phases:
+- `strategy` - Players who don't submit are marked dead but round stays in "strategy"
+- `trap_creation` - Same issue
+- `sacrifice_volunteer` - Had NO timeout handling at all
+
+**Solution:** Every timeout handler in `api_get_game_state` MUST:
+1. Mark timed-out players appropriately (dead, etc.)
+2. Clear `submission_start_time = None`
+3. Check if round should advance and set new `status`
+4. Spawn appropriate judgement/next phase function
+
+**Edge Case - All Players Dead:** If ALL players timeout, skip directly to `"results"` instead of `"judgement"` (nothing to judge). For cooperative mode, also set `coop_team_survived = False`.
+
+```python
+# After handling timeouts, check if everyone is dead
+all_dead = all(not p.is_alive for p in lobby_players)
+if all_dead:
+    current_round.status = "results"  # Skip judgement
+else:
+    current_round.status = "judgement"
+    run_round_judgement.spawn(game.code)
+```
+
+### Timeout Images
+
+Timeout images are generated for ALL round types (not just cooperative) via `generate_timeout_image.spawn()`. The images show characters "doing nothing" while death approaches - see `TIMEOUT_IMAGE_OPTIONS` in `prompts.py` for the prompt options.
 
 ---
 
@@ -375,6 +482,7 @@ save_game(game)  # Save once at the end
 | `/api/next_round?code={code}` | POST | Admin advances round |
 | `/api/regenerate_character_image?code={code}` | POST | Regenerate avatar `{ player_id }` |
 | `/api/retry_player_videos?code={code}` | POST | Retry failed video generation |
+| `/api/debug_skip_to_state?code={code}` | POST | Debug: skip to game state `{ player_id, game_status, round_type, round_status, round_number, num_dummy_players }` |
 
 ---
 
@@ -439,6 +547,7 @@ coop_team_winner_id: str | None
 coop_team_loser_id: str | None
 coop_winning_strategy_id: str | None
 coop_team_survived: bool | None
+coop_team_reason: str | None
 
 # Sacrifice specific
 sacrifice_volunteers: dict   # player_id -> bool

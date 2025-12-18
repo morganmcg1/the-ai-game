@@ -267,6 +267,7 @@ input:focus {
   letter-spacing: 0.1em;
   font-size: 1.2rem;
   display: block;
+  text-align: center;
 }
 
 .health-bar-frame {

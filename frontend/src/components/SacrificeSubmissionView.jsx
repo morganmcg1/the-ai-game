@@ -2,10 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Skull, Heart, Clock } from 'lucide-react';
 
-const DEFAULT_TIMEOUT_SECONDS = 30;
+const DEFAULT_TIMEOUT_SECONDS = 45;
 
 export function SacrificeSubmissionView({ round, playerId, players, onSubmit, config = {} }) {
-    const timeoutSeconds = config.submission_timeout_seconds || DEFAULT_TIMEOUT_SECONDS;
+    const timeoutSeconds = config.sacrifice_submission_timeout_seconds || DEFAULT_TIMEOUT_SECONDS;
     const [speech, setSpeech] = useState('');
     const [loading, setLoading] = useState(false);
     const [submitted, setSubmitted] = useState(false);

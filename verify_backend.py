@@ -3,7 +3,7 @@ import time
 import sys
 
 # Constants matching api.js logic
-PROJECT_NAME = "weightsandbiases-ai-game--death-by-ai-clone"
+PROJECT_NAME = "weightsandbiases-ai-game--mas-ai"
 ENV = "dev"
 DOMAIN = "modal.run"
 

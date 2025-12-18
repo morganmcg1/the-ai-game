@@ -35,7 +35,19 @@ export function SacrificeVotingView({ round, playerId, players, onVote }) {
     });
 
     const totalVotes = Object.values(round.sacrifice_votes || {}).length;
-    const totalPlayers = Object.values(players).filter(p => p.is_alive).length;
+
+    // Count only players who CAN vote (exclude players who are the only eligible candidate)
+    const alivePlayers = Object.values(players).filter(p => p.is_alive);
+    const playersWhoCanVote = alivePlayers.filter(p => {
+        if (hasVolunteers) {
+            // Player can vote if there's at least one volunteer that isn't themselves
+            return volunteers.some(vid => vid !== p.id);
+        } else {
+            // If no volunteers, player can vote if there's anyone else alive
+            return alivePlayers.length > 1;
+        }
+    });
+    const totalExpectedVotes = playersWhoCanVote.length;
 
     return (
         <div className="card">
@@ -87,14 +99,16 @@ export function SacrificeVotingView({ round, playerId, players, onVote }) {
                     const isSelected = selectedId === player.id;
                     const isVolunteer = volunteers.includes(player.id);
                     const voteCount = voteCounts[player.id] || 0;
+                    const isSelf = player.id === playerId;
 
                     return (
                         <motion.button
                             key={player.id}
-                            onClick={() => handleVote(player.id)}
-                            disabled={loading}
-                            whileHover={{ scale: 1.03 }}
-                            whileTap={{ scale: 0.97 }}
+                            onClick={() => !isSelf && handleVote(player.id)}
+                            disabled={loading || isSelf}
+                            whileHover={isSelf ? {} : { scale: 1.03 }}
+                            whileTap={isSelf ? {} : { scale: 0.97 }}
+                            title={isSelf ? "You cannot vote for yourself" : `Vote for ${player.name}`}
                             style={{
                                 position: 'relative',
                                 padding: '1.25rem',
@@ -103,13 +117,35 @@ export function SacrificeVotingView({ round, playerId, players, onVote }) {
                                     : 'rgba(0, 0, 0, 0.3)',
                                 border: isSelected
                                     ? '2px solid #ff4444'
-                                    : '1px solid rgba(255, 255, 255, 0.2)',
+                                    : isSelf
+                                        ? '1px dashed rgba(255, 255, 255, 0.15)'
+                                        : '1px solid rgba(255, 255, 255, 0.2)',
                                 borderRadius: '8px',
-                                cursor: 'pointer',
+                                cursor: isSelf ? 'not-allowed' : 'pointer',
                                 textAlign: 'center',
-                                transition: 'all 0.2s ease'
+                                transition: 'all 0.2s ease',
+                                opacity: isSelf ? 0.4 : 1,
+                                filter: isSelf ? 'grayscale(50%)' : 'none'
                             }}
                         >
+                            {/* "YOU" badge for own card */}
+                            {isSelf && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '0.5rem',
+                                    left: '0.5rem',
+                                    background: 'rgba(100, 100, 100, 0.9)',
+                                    padding: '4px 8px',
+                                    borderRadius: '4px',
+                                    fontSize: '10px',
+                                    color: '#999',
+                                    fontFamily: 'monospace',
+                                    fontWeight: 'bold'
+                                }}>
+                                    YOU
+                                </div>
+                            )}
+
                             {/* Player avatar or icon */}
                             {player.character_image_url ? (
                                 <img
@@ -122,7 +158,8 @@ export function SacrificeVotingView({ round, playerId, players, onVote }) {
                                         objectFit: 'cover',
                                         margin: '0 auto 0.5rem',
                                         display: 'block',
-                                        border: isSelected ? '2px solid #ff4444' : '2px solid transparent'
+                                        border: isSelected ? '2px solid #ff4444' : isSelf ? '2px solid #666' : '2px solid transparent',
+                                        filter: isSelf ? 'grayscale(100%)' : 'none'
                                     }}
                                 />
                             ) : (
@@ -130,19 +167,19 @@ export function SacrificeVotingView({ round, playerId, players, onVote }) {
                                     width: '60px',
                                     height: '60px',
                                     borderRadius: '50%',
-                                    background: 'rgba(255, 255, 255, 0.1)',
+                                    background: isSelf ? 'rgba(100, 100, 100, 0.3)' : 'rgba(255, 255, 255, 0.1)',
                                     margin: '0 auto 0.5rem',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center'
                                 }}>
-                                    <User size={28} color="white" />
+                                    <User size={28} color={isSelf ? '#666' : 'white'} />
                                 </div>
                             )}
 
                             <span style={{
                                 fontFamily: 'monospace',
-                                color: isSelected ? '#ff4444' : 'white',
+                                color: isSelf ? '#666' : isSelected ? '#ff4444' : 'white',
                                 fontWeight: isSelected ? 'bold' : 'normal',
                                 display: 'block',
                                 marginBottom: '0.25rem'
@@ -209,7 +246,7 @@ export function SacrificeVotingView({ round, playerId, players, onVote }) {
                 )}
                 <br />
                 <span style={{ marginTop: '0.5rem', display: 'inline-block' }}>
-                    {totalVotes} / {totalPlayers} votes cast
+                    {totalVotes} / {totalExpectedVotes} votes cast
                 </span>
             </div>
         </div>

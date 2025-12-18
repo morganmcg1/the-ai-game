@@ -10,6 +10,8 @@ import time
 import uuid
 import random
 
+import prompts
+
 # --- Video Style Themes ---
 # Each game ending randomly selects one theme for all player videos
 VIDEO_STYLE_THEMES = [
@@ -54,38 +56,88 @@ IMAGE_STYLE_THEMES = [
 # --- Random Character Generation Traits ---
 # Aligned with the 5 character fields: look, weapon, talent, flaw, catchphrase
 
-RANDOM_LOOKS = [
+# Split into gendered humanoid looks (50/50) and non-human looks
+FEMALE_LOOKS = [
     "wild purple hair, leather jacket, mysterious scar across eye",
-    "suspiciously normal accountant vibes, but with glowing red eyes",
-    "sentient pile of moss wearing a tiny top hat",
     "buff grandma energy, knitting needles tucked behind ear",
     "goth pixie with too many piercings to count",
+    "cyberpunk vampire queen with RGB fangs",
+    "sleepy witch who hasn't slept since the 1400s",
+    "aggressively cheerful clown (not evil, just intense)",
+    "discount store superheroine with a bedsheet cape",
+    "Victorian ghost lady who refuses to update her wardrobe",
+    "time-displaced lady knight confused by everything",
+    "wholesome orc grandmother with reading glasses",
+    "conspiracy theorist woman with tinfoil fashion sense",
+    "ex-villainess trying to rebrand as an influencer",
+    "sorceress who got her degree online",
+    "anime heroine refusing to acknowledge she's a side character",
+    "interdimensional tourist woman with too many cameras",
+    "retired goddess working retail",
+    "fierce warrior queen with battle-worn armor",
+    "punk rock girl with neon mohawk and chains",
+    "mysterious femme fatale in a trenchcoat",
+    "cheerful space pirate captain with an eyepatch",
+    "brooding necromancer lady who only wears black",
+    "chaotic scientist woman with wild hair and goggles",
+    "stoic samurai woman with a haunted past",
+    "bubbly pop star undercover as a normal person",
+    "grumpy librarian witch who's seen too much",
+]
+
+MALE_LOOKS = [
+    "wild purple hair, leather jacket, mysterious scar across eye",
+    "suspiciously normal accountant vibes, but with glowing red eyes",
+    "grizzled old man with an impressive beard and secrets",
+    "cyberpunk vampire lord with RGB fangs",
+    "sleepy wizard who hasn't slept since the 1400s",
+    "aggressively cheerful clown (not evil, just intense)",
+    "discount store superhero with a bedsheet cape",
+    "Victorian ghost gentleman who refuses to update his wardrobe",
+    "time-displaced knight confused by everything",
+    "conspiracy theorist guy with tinfoil fashion sense",
+    "ex-villain trying to rebrand as an influencer",
+    "wizard who got his degree online",
+    "anime protagonist refusing to acknowledge he's a side character",
+    "interdimensional tourist man with too many cameras",
+    "retired god working retail",
+    "buff barbarian with more muscles than sense",
+    "punk rock guy with neon mohawk and chains",
+    "mysterious man in a trenchcoat (definitely not three kids)",
+    "cheerful space pirate captain with an eyepatch",
+    "brooding necromancer who only wears black",
+    "chaotic scientist with wild hair and goggles",
+    "stoic samurai with a haunted past",
+    "washed-up rockstar trying to make a comeback",
+    "grumpy wizard who's had it with adventurers",
+    "nervous accountant with a dark secret",
+]
+
+NON_HUMAN_LOOKS = [
+    "sentient pile of moss wearing a tiny top hat",
     "floating head with a magnificent mustache",
     "skeleton in a business casual polo shirt",
     "three raccoons in a trenchcoat (poorly disguised)",
-    "cyberpunk vampire with RGB fangs",
-    "sleepy wizard who hasn't slept since the 1400s",
-    "aggressively cheerful clown (not evil, just intense)",
     "sentient vending machine with trust issues",
-    "discount store superhero with a bedsheet cape",
-    "Victorian ghost who refuses to update their wardrobe",
     "extremely buff corgi standing on hind legs",
     "eldritch horror trying to blend in at a coffee shop",
-    "time-displaced knight confused by everything",
-    "wholesome orc grandmother with reading glasses",
-    "conspiracy theorist with tinfoil fashion sense",
     "robot learning human emotions (badly)",
     "mushroom person who is always slightly damp",
-    "ex-villain trying to rebrand as an influencer",
-    "wizard who got their degree online",
     "goblin CEO in an ill-fitting suit",
     "ghost of someone who died from embarrassment",
-    "anime protagonist refusing to acknowledge they're a side character",
-    "interdimensional tourist with too many cameras",
-    "retired god working retail",
     "cat that learned to walk upright and won't stop judging",
     "person who is clearly two kids stacked in adult clothes",
+    "sentient cloud of anxiety with googly eyes",
+    "a very polite demon just trying to do their job",
+    "interdimensional slime creature in business attire",
+    "possessed teddy bear with glowing button eyes",
+    "time-traveling dinosaur in a tiny hat",
+    "friendly eldritch tentacle monster with glasses",
+    "a literal trash panda (raccoon) in formal wear",
 ]
+
+# Combined for backwards compatibility (weighted 40% female, 40% male, 20% non-human)
+RANDOM_LOOKS = FEMALE_LOOKS + MALE_LOOKS + NON_HUMAN_LOOKS
 
 RANDOM_WEAPONS = [
     "rusty machete held together by duct tape and prayers",
@@ -240,14 +292,28 @@ RANDOM_ART_STYLES = [
 
 
 def generate_random_character_traits(seed: int = None) -> dict:
-    """Generate random character traits matching the 5 character fields."""
+    """Generate random character traits matching the 5 character fields.
+
+    Gender distribution: 40% female humanoid, 40% male humanoid, 20% non-human.
+    This ensures a balanced 50/50 male/female split among humanoid characters.
+    """
     if seed is not None:
         rng = random.Random(seed)
     else:
         rng = random.Random()
 
+    # Pick character type: 40% female, 40% male, 20% non-human
+    # This gives 50/50 male/female among humanoids
+    roll = rng.random()
+    if roll < 0.4:
+        look = rng.choice(FEMALE_LOOKS)
+    elif roll < 0.8:
+        look = rng.choice(MALE_LOOKS)
+    else:
+        look = rng.choice(NON_HUMAN_LOOKS)
+
     traits = {
-        "look": rng.choice(RANDOM_LOOKS),
+        "look": look,
         "weapon": rng.choice(RANDOM_WEAPONS),
         "talent": rng.choice(RANDOM_TALENTS),
         "flaw": rng.choice(RANDOM_FLAWS),
@@ -259,8 +325,12 @@ def generate_random_character_traits(seed: int = None) -> dict:
 def build_character_prompt_from_traits(traits: dict) -> str:
     """Build a character image prompt from the 5 traits."""
     art_style = random.choice(RANDOM_ART_STYLES)
-    prompt = f"""Game character portrait: {traits['look']}, wielding {traits['weapon']}. Art style: {art_style}."""
-    return prompt
+    return prompts.format_prompt(
+        prompts.CHARACTER_SIMPLE,
+        look=traits['look'],
+        weapon=traits['weapon'],
+        art_style=art_style
+    )
 
 
 def apply_style_theme(prompt: str, style_theme: str | None) -> str:
@@ -291,7 +361,8 @@ image = modal.Image.debian_slim().pip_install(
     "httpx",  # For async HTTP requests
     "pyyaml"  # For config loading
 ).add_local_dir("frontend/dist", remote_path="/assets"
-).add_local_file("config.yaml", remote_path="/config.yaml")
+).add_local_file("config.yaml", remote_path="/config.yaml"
+).add_local_file("backend/prompts.py", remote_path="/root/prompts.py")
 
 app = modal.App("mas-ai", image=image)
 
@@ -353,50 +424,11 @@ def generate_scenario_llm(round_num: int, max_rounds: int = 5):
     """Generate a scenario with Corrupted Simulation narrative framing."""
     client = get_llm_client()
 
-    # Narrative phase based on progression
-    if round_num == 1:
-        phase = "initialization sequence"
-        corruption = "minor data artifacts"
-        narrative_hint = "The simulation is just booting up, things seem almost normal but slightly off."
-    elif round_num == 2:
-        phase = "calibration protocol"
-        corruption = "increasing instability"
-        narrative_hint = "The system is trying to calibrate but errors are creeping in."
-    elif round_num == max_rounds:
-        phase = "exit protocol - final level"
-        corruption = "critical system failure, reality breaking down"
-        narrative_hint = "This is the final test before escape. Everything is falling apart."
-    else:
-        phase = "corrupted memory sector"
-        corruption = "severe fragmentation"
-        narrative_hint = "Deep in corrupted data, reality is unreliable."
-
-    prompt = f"""Generate a deadly survival scenario for a party game. Level {round_num} of {max_rounds}.
-
-Create a SHORT scenario (2-3 sentences) with:
-1. A CLEAR THREAT the player must deal with (monster, trap, disaster, enemy, etc.)
-2. A SPECIFIC SETTING (jungle temple, space station, haunted mansion, medieval dungeon, etc.)
-3. ONE subtle "wrongness" that hints something is off (wrong colors, impossible geometry, repeating patterns)
-
-The scenario must give players something ACTIONABLE to respond to - they should be able to:
-- Fight or flee from something
-- Solve a puzzle or disarm a trap
-- Talk/negotiate their way out
-- Use an object or tool creatively
-- Make a clever observation or joke
-
-GOOD examples (clear threats, actionable):
-- "You're in a flooding submarine. Water pours through a crack in the hull. The emergency hatch is jammed, and something large just bumped the hull from outside."
-- "A masked killer blocks the cabin door, machete raised. The window behind you is small but breakable. The killer tilts their head the same way every 3 seconds, like a broken animatronic."
-- "You wake up strapped to a table in a mad scientist's lab. A laser is slowly moving toward you. The scientist is monologuing but keeps repeating the same sentence."
-
-BAD examples (too vague, no clear action):
-- "You're in a forest and shadows are purple and you're holding random objects" (no clear threat)
-- "Reality feels wrong and things keep shifting" (nothing to do)
-
-Write in second person ("You are...", "You find yourself...")
-
-Generate ONLY the scenario, nothing else:"""
+    prompt = prompts.format_prompt(
+        prompts.SCENARIO_GENERATION,
+        round_num=round_num,
+        max_rounds=max_rounds
+    )
 
     try:
         print(f"SCENARIO GEN: Calling LLM for round {round_num}...", flush=True)
@@ -411,34 +443,14 @@ Generate ONLY the scenario, nothing else:"""
         import traceback
         print(f"SCENARIO GEN Error: {type(e).__name__}: {e}", flush=True)
         print(f"SCENARIO GEN Traceback: {traceback.format_exc()}", flush=True)
-        return "ERROR: SCENARIO DATA CORRUPTED. You are suspended in static. Something moves in the noise."
+        return prompts.FALLBACK_SCENARIO
 
 
 async def generate_last_stand_scenario_async():
     """Generate the EVIL SANTA final boss scenario."""
     import httpx
 
-    prompt = """Generate a deadly survival scenario featuring an EVIL ANIME SANTA as the final boss.
-
-Create a SHORT scenario (2-3 sentences) with:
-1. EVIL SANTA as the main threat - he's cartoonishly villainous, anime-inspired, over-the-top evil
-2. Setting: His twisted workshop/lair (corrupted North Pole, nightmare factory, etc.)
-3. He should be doing something menacing but absurdly dramatic (cackling, monologuing, etc.)
-
-Evil Santa personality traits to include:
-- Speaks in third person ("SANTA SEES ALL!")
-- Makes twisted holiday puns ("You've been VERY naughty...")
-- Has anime villain energy (dramatic poses, glowing eyes, maniacal laughter)
-- His elves are now demonic minions
-- His bag contains weapons/traps instead of presents
-
-GOOD examples:
-- "Evil Santa's eyes glow crimson as he rises from his throne of frozen skulls. 'HO HO HO! Santa knows when you've been SLEEPING!' He hurls razor-sharp candy canes while his demon elves cackle."
-- "You stand in Santa's nightmare workshop. Conveyor belts carry screaming gingerbread men into furnaces. Evil Santa adjusts his blood-red hat and grins. 'COAL? No no no... Santa has something SPECIAL for naughty children.'"
-
-Write in second person ("You are...", "You find yourself...")
-
-Generate ONLY the scenario, nothing else:"""
+    prompt = prompts.LAST_STAND_SCENARIO
 
     try:
         print(f"LAST STAND SCENARIO: Generating Evil Santa scenario...", flush=True)
@@ -464,57 +476,18 @@ Generate ONLY the scenario, nothing else:"""
         import traceback
         print(f"LAST STAND SCENARIO Error: {type(e).__name__}: {e}", flush=True)
         print(f"LAST STAND SCENARIO Traceback: {traceback.format_exc()}", flush=True)
-        return "Evil Santa's eyes glow crimson in his nightmare workshop. 'HO HO HO! SANTA SEES YOU WHEN YOU'RE SLEEPING!' Demon elves surround you as he loads razor-sharp candy canes into a massive cannon."
+        return prompts.FALLBACK_LAST_STAND_SCENARIO
 
 
 async def generate_scenario_llm_async(round_num: int, max_rounds: int = 5):
     """Async version of generate_scenario_llm for parallel pre-warming."""
     import httpx
 
-    # Narrative phase based on progression
-    if round_num == 1:
-        phase = "initialization sequence"
-        corruption = "minor data artifacts"
-        narrative_hint = "The simulation is just booting up, things seem almost normal but slightly off."
-    elif round_num == 2:
-        phase = "calibration protocol"
-        corruption = "increasing instability"
-        narrative_hint = "The system is trying to calibrate but errors are creeping in."
-    elif round_num == max_rounds:
-        phase = "exit protocol - final level"
-        corruption = "critical system failure, reality breaking down"
-        narrative_hint = "This is the final test before escape. Everything is falling apart."
-    else:
-        phase = "corrupted memory sector"
-        corruption = "severe fragmentation"
-        narrative_hint = "Deep in corrupted data, reality is unreliable."
-
-    prompt = f"""Generate a deadly survival scenario for a party game. Level {round_num} of {max_rounds}.
-
-Create a SHORT scenario (2-3 sentences) with:
-1. A CLEAR THREAT the player must deal with (monster, trap, disaster, enemy, etc.)
-2. A SPECIFIC SETTING (jungle temple, space station, haunted mansion, medieval dungeon, etc.)
-3. ONE subtle "wrongness" that hints something is off (wrong colors, impossible geometry, repeating patterns)
-
-The scenario must give players something ACTIONABLE to respond to - they should be able to:
-- Fight or flee from something
-- Solve a puzzle or disarm a trap
-- Talk/negotiate their way out
-- Use an object or tool creatively
-- Make a clever observation or joke
-
-GOOD examples (clear threats, actionable):
-- "You're in a flooding submarine. Water pours through a crack in the hull. The emergency hatch is jammed, and something large just bumped the hull from outside."
-- "A masked killer blocks the cabin door, machete raised. The window behind you is small but breakable. The killer tilts their head the same way every 3 seconds, like a broken animatronic."
-- "You wake up strapped to a table in a mad scientist's lab. A laser is slowly moving toward you. The scientist is monologuing but keeps repeating the same sentence."
-
-BAD examples (too vague, no clear action):
-- "You're in a forest and shadows are purple and you're holding random objects" (no clear threat)
-- "Reality feels wrong and things keep shifting" (nothing to do)
-
-Write in second person ("You are...", "You find yourself...")
-
-Generate ONLY the scenario, nothing else:"""
+    prompt = prompts.format_prompt(
+        prompts.SCENARIO_GENERATION,
+        round_num=round_num,
+        max_rounds=max_rounds
+    )
 
     try:
         print(f"SCENARIO GEN ASYNC: Calling LLM for round {round_num}...", flush=True)
@@ -540,7 +513,7 @@ Generate ONLY the scenario, nothing else:"""
         import traceback
         print(f"SCENARIO GEN ASYNC Error round {round_num}: {type(e).__name__}: {e}", flush=True)
         print(f"SCENARIO GEN ASYNC Traceback: {traceback.format_exc()}", flush=True)
-        return "ERROR: SCENARIO DATA CORRUPTED. You are suspended in static. Something moves in the noise."
+        return prompts.FALLBACK_SCENARIO
 
 
 async def judge_strategy_llm_async(scenario: str, strategy: str):
@@ -548,24 +521,11 @@ async def judge_strategy_llm_async(scenario: str, strategy: str):
     import re
     import httpx
 
-    prompt = f"""Judge if this survival strategy works. Be harsh but fair.
-
-SCENARIO: {scenario}
-
-STRATEGY: {strategy}
-
-Rules:
-- Clever, creative, or funny strategies SURVIVE
-- Generic, lazy, or nonsensical strategies DIE
-- Must actually address the threat
-
-IMPORTANT - Keep "reason" SHORT (1-2 sentences, under 30 words). Focus on what happened, not glitchy/meta stuff. Can be darkly funny.
-
-Good reasons: "The shark wasn't impressed by diplomacy." / "Your torch scared them off long enough to escape."
-Bad reasons: "Your data fragmented across corrupted memory sectors as the simulation..." (too long/meta)
-
-JSON only, no markdown:
-{{"survived": true/false, "reason": "1-2 sentences max", "visual_prompt": "scene for image"}}"""
+    prompt = prompts.format_prompt(
+        prompts.STRATEGY_JUDGEMENT,
+        scenario=scenario,
+        strategy=strategy
+    )
     try:
         print(f"LLM Judge: Calling API for strategy: {strategy[:50]}...", flush=True)
         timeout = CONFIG["llm"]["default_timeout_seconds"]
@@ -600,7 +560,7 @@ JSON only, no markdown:
         return content.strip()
     except Exception as e:
         print(f"LLM Judge Error: {e}", flush=True)
-        return '{"survived": false, "reason": "SYSTEM ERROR: User data corrupted during evaluation. Terminating process.", "visual_prompt": "A figure dissolving into static and digital noise, fragments of code visible in the air"}'
+        return prompts.FALLBACK_STRATEGY_JUDGEMENT
 
 
 async def rank_all_strategies_llm_async(scenario: str, strategies: list[dict]) -> str:
@@ -616,33 +576,12 @@ async def rank_all_strategies_llm_async(scenario: str, strategies: list[dict]) -
         for i, s in enumerate(strategies)
     ])
 
-    prompt = f"""You are judging a survival game. Given a deadly scenario, rank all player strategies from BEST to WORST.
-
-SCENARIO: {scenario}
-
-PLAYER STRATEGIES:
-{strategy_list}
-
-RANKING CRITERIA (in order of importance):
-1. CREATIVITY - Original, unexpected approaches beat generic solutions
-2. EFFECTIVENESS - Would this actually work in the scenario?
-3. ENTERTAINMENT VALUE - Funny, dramatic, or memorable strategies rank higher
-4. SPECIFICITY - Detailed plans beat vague "I run away" responses
-
-IMPORTANT RULES:
-- Everyone survives this round (it's about WHO survives BEST)
-- Rank from 1 (best) to {len(strategies)} (worst)
-- No ties allowed - you must pick a winner
-- Give each player 1-2 sentences of commentary explaining their rank
-- Generate a visual_prompt for each player showing their moment of glory/mediocrity
-
-Return ONLY valid JSON in this exact format:
-{{
-    "rankings": [
-        {{"player_id": "id1", "rank": 1, "commentary": "Brilliant use of...", "visual_prompt": "A hero triumphantly..."}},
-        {{"player_id": "id2", "rank": 2, "commentary": "Solid approach but...", "visual_prompt": "A person competently..."}}
-    ]
-}}"""
+    prompt = prompts.format_prompt(
+        prompts.RANKED_JUDGEMENT,
+        scenario=scenario,
+        strategy_list=strategy_list,
+        num_strategies=len(strategies)
+    )
 
     try:
         print(f"RANKED JUDGE: Calling LLM for {len(strategies)} strategies...", flush=True)
@@ -678,8 +617,8 @@ Return ONLY valid JSON in this exact format:
         return json.dumps({
             "rankings": [
                 {"player_id": s["player_id"], "rank": i+1,
-                 "commentary": "The AI judge malfunctioned...",
-                 "visual_prompt": "A confused figure in digital static"}
+                 "commentary": prompts.FALLBACK_RANKED_COMMENTARY,
+                 "visual_prompt": prompts.FALLBACK_RANKED_VISUAL}
                 for i, s in enumerate(shuffled)
             ]
         })
@@ -746,27 +685,13 @@ async def generate_character_image_async(character_prompt: str, style_theme: str
     ]
     random_moment = random.choice(moments)
 
-    character_styles = [
-        "cyberpunk",
-        "lego movie"
-        "noir",
-        "anime",
-        "vaporwave",
-        "pixel art",
-        "low poly",
-        "retro",
-        "1960's space art",
-        "steampunk",
-    ]
-    random_character_style = random.choice(character_styles)
-
     # Build a rich prompt that shows the character in an action scene with all their traits
-    full_character_prompt = f"""Game character looking {random_look} in the style of {random_character_style}. The character's description is as follows:
-
-{character_prompt}.
-
-The character is mid {random_moment}, displaying their true personality and equipment.
-Full scene is the style of {random_character_style}."""
+    full_character_prompt = prompts.format_prompt(
+        prompts.CHARACTER_IMAGE,
+        random_look=random_look,
+        character_prompt=character_prompt,
+        random_moment=random_moment
+    )
 
     print(f"CHARACTER IMG: Generating with style: {style_theme[:40]}...", flush=True)
     print(f"CHARACTER IMG: Full prompt: {full_character_prompt[:100]}...", flush=True)
@@ -797,24 +722,11 @@ def judge_strategy_llm(scenario: str, strategy: str):
     """Sync version of judgement with simulation flavor."""
     import re
     client = get_llm_client()
-    prompt = f"""Judge if this survival strategy works. Be harsh but fair.
-
-SCENARIO: {scenario}
-
-STRATEGY: {strategy}
-
-Rules:
-- Clever, creative, or funny strategies SURVIVE
-- Generic, lazy, or nonsensical strategies DIE
-- Must actually address the threat
-
-IMPORTANT - Keep "reason" SHORT (1-2 sentences, under 30 words). Focus on what happened, not glitchy/meta stuff. Can be darkly funny.
-
-Good reasons: "The shark wasn't impressed by diplomacy." / "Your torch scared them off long enough to escape."
-Bad reasons: "Your data fragmented across corrupted memory sectors as the simulation..." (too long/meta)
-
-JSON only, no markdown:
-{{"survived": true/false, "reason": "1-2 sentences max", "visual_prompt": "scene for image"}}"""
+    prompt = prompts.format_prompt(
+        prompts.STRATEGY_JUDGEMENT,
+        scenario=scenario,
+        strategy=strategy
+    )
     try:
         print(f"LLM Judge: Calling API for strategy: {strategy[:50]}...", flush=True)
         completion = client.chat.completions.create(
@@ -837,7 +749,7 @@ JSON only, no markdown:
         return content.strip()
     except Exception as e:
         print(f"LLM Judge Error: {e}", flush=True)
-        return '{"survived": false, "reason": "SYSTEM ERROR: User data corrupted during evaluation. Terminating process.", "visual_prompt": "A figure dissolving into static and digital noise, fragments of code visible in the air"}'
+        return prompts.FALLBACK_STRATEGY_JUDGEMENT
 
 
 async def generate_video_prompt_llm_async(player_name: str, rank: int, total_players: int, score: int, video_theme: str):
@@ -849,34 +761,16 @@ async def generate_video_prompt_llm_async(player_name: str, rank: int, total_pla
     is_winner = rank == 1
     is_last = rank == total_players
 
-    # Simulation-flavored context
-    if is_winner:
-        context = f"{player_name} has completed the EXIT PROTOCOL! They escaped the corrupted simulation with {score} data integrity points. Their consciousness has been successfully extracted."
-        tone = "triumphant, epic, with subtle digital/simulation undertones"
-    elif is_last:
-        context = f"{player_name}'s data was nearly corrupted beyond recovery. They finished last with {score} points but their consciousness fragment was salvaged."
-        tone = "consoling but humorous, gentle roasting, with simulation flavor"
-    else:
-        context = f"{player_name} achieved partial extraction, finishing in position {rank} out of {total_players} with {score} integrity points."
-        tone = "acknowledging, mildly congratulatory, with digital undertones"
+    # Build context and tone using helper
+    context, tone = prompts.build_video_context(player_name, rank, total_players, score)
 
-    prompt = f"""You are writing a very short video script for a game called "Mas AI".
-The game's premise: Players were consciousness fragments trapped in a corrupted AI simulation.
-They've now escaped (or been extracted) after surviving deadly levels.
-
-The video theme/setting is: {video_theme}
-
-Context: {context}
-
-Generate a JSON response with:
-1. "scene": A 1-sentence visual description of what's happening (must fit the theme: {video_theme})
-2. "dialogue": A short spoken announcement (2-3 sentences max, must include the player's name "{player_name}")
-
-The tone should be: {tone}
-Include subtle references to escaping, data integrity, or consciousness extraction where appropriate.
-
-Respond with ONLY valid JSON, no markdown:
-{{"scene": "...", "dialogue": "..."}}"""
+    prompt = prompts.format_prompt(
+        prompts.VIDEO_SCRIPT_GENERATION,
+        video_theme=video_theme,
+        context=context,
+        player_name=player_name,
+        tone=tone
+    )
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -909,7 +803,7 @@ Respond with ONLY valid JSON, no markdown:
     if is_winner:
         return {
             "scene": f"A figure emerges from a portal of light and code, reality stabilizing around them as they escape the simulation",
-            "dialogue": f"EXIT PROTOCOL COMPLETE. {player_name}, your consciousness has been successfully extracted! You are the primary survivor of the corrupted simulation!"
+            "dialogue": prompts.FALLBACK_VIDEO_SCRIPT["dialogue"].format(player_name=player_name)
         }
     elif is_last:
         return {
@@ -1074,6 +968,7 @@ class Round(BaseModel):
     coop_team_loser_id: Optional[str] = None    # player who got random -200 penalty
     coop_winning_strategy_id: Optional[str] = None  # highest-voted strategy
     coop_team_survived: Optional[bool] = None   # did the team survive?
+    coop_team_reason: Optional[str] = None      # judgement reason for team outcome
 
     # Sacrifice round specific
     sacrifice_volunteers: Dict[str, bool] = {}  # player_id -> volunteered (True)
@@ -1263,7 +1158,8 @@ async def api_join_game(request: Request):
 async def api_get_config():
     """Return frontend-relevant configuration values."""
     return {
-        "submission_timeout_seconds": CONFIG["game"]["submission_timeout_seconds"]
+        "submission_timeout_seconds": CONFIG["game"]["submission_timeout_seconds"],
+        "volunteer_timeout_seconds": CONFIG["game"]["volunteer_timeout_seconds"]
     }
 
 
@@ -1325,7 +1221,14 @@ async def api_get_game_state(request: Request):
     needs_save = False
     if game.status == "playing" and game.current_round_idx >= 0:
         current_round = game.rounds[game.current_round_idx]
-        timeout_seconds = CONFIG["game"]["submission_timeout_seconds"]
+
+        # Determine timeout based on current phase
+        if current_round.status == "sacrifice_submission":
+            timeout_seconds = CONFIG["game"]["sacrifice_submission_timeout_seconds"]
+        elif current_round.status == "sacrifice_volunteer":
+            timeout_seconds = CONFIG["game"]["volunteer_timeout_seconds"]
+        else:
+            timeout_seconds = CONFIG["game"]["submission_timeout_seconds"]
 
         # Check if we're in a submission phase with an active timer
         if current_round.submission_start_time:
@@ -1338,19 +1241,56 @@ async def api_get_game_state(request: Request):
                     for pid, p in game.players.items():
                         if p.is_alive and not p.strategy and p.in_lobby:
                             p.is_alive = False
-                            p.death_reason = "TIMEOUT: Failed to submit strategy in time. Connection terminated."
+                            p.death_reason = "TIMEOUT: Stood around doing nothing while death approached."
                             current_round.timed_out_players[pid] = True
                             needs_save = True
                             print(f"TIMEOUT: Player {p.name} timed out in strategy phase", flush=True)
 
-                            # For cooperative mode, generate a timeout failure image
+                            # For cooperative mode, set placeholder strategy for voting
                             if current_round.type == "cooperative":
                                 p.strategy = "[TIMEOUT - No strategy submitted]"
-                                # Spawn timeout image generation
-                                generate_timeout_image.spawn(game.code, pid, current_round.style_theme)
+
+                            # Generate timeout image showing them doing nothing
+                            generate_timeout_image.spawn(game.code, pid, current_round.style_theme)
 
                     # Clear the timer to prevent re-triggering
                     current_round.submission_start_time = None
+
+                    # Check if we should auto-advance to judgement (all players handled)
+                    lobby_players = [p for p in game.players.values() if p.in_lobby]
+                    all_handled = all(
+                        not p.is_alive or p.strategy
+                        for p in lobby_players
+                    )
+                    if all_handled:
+                        # Check if everyone is dead (all timed out)
+                        all_dead = all(not p.is_alive for p in lobby_players)
+
+                        if all_dead:
+                            # Everyone timed out - skip to results, no judgement needed
+                            current_round.status = "results"
+                            needs_save = True
+                            print(f"TIMEOUT: All players dead, skipping to results", flush=True)
+
+                            # For cooperative mode, set team failure
+                            if current_round.type == "cooperative":
+                                current_round.coop_team_survived = False
+                                current_round.coop_team_reason = "The entire team stood around doing nothing. Total failure."
+                        else:
+                            # Some players submitted - advance to judgement
+                            current_round.status = "judgement"
+                            needs_save = True
+                            print(f"TIMEOUT: All players handled, advancing to judgement", flush=True)
+
+                            # Spawn appropriate judgement based on round type
+                            if current_round.type == "ranked":
+                                run_ranked_judgement.spawn(game.code)
+                            elif current_round.type == "cooperative":
+                                # For coop, generate strategy images first
+                                generate_coop_strategy_images.spawn(game.code)
+                            else:
+                                # Standard survival/blind_architect/last_stand
+                                run_round_judgement.spawn(game.code)
 
                 elif current_round.status == "trap_creation":
                     # Mark players who haven't submitted trap as timed out
@@ -1362,30 +1302,87 @@ async def api_get_game_state(request: Request):
                             needs_save = True
                             print(f"TIMEOUT: Player {p.name} timed out in trap_creation phase", flush=True)
 
+                            # Generate timeout image
+                            generate_timeout_image.spawn(game.code, pid, current_round.style_theme)
+
                     # Clear the timer
                     current_round.submission_start_time = None
 
+                    # Check if all players are dead (everyone timed out)
+                    lobby_players = [p for p in game.players.values() if p.in_lobby]
+                    all_dead = all(not p.is_alive for p in lobby_players)
+                    if all_dead:
+                        # Everyone timed out - skip to results
+                        current_round.status = "results"
+                        needs_save = True
+                        print(f"TIMEOUT: All players dead in trap_creation, skipping to results", flush=True)
+                    elif current_round.trap_proposals:
+                        # Some traps submitted - advance to voting
+                        current_round.status = "trap_voting"
+                        needs_save = True
+                        print(f"TIMEOUT: Advancing to trap_voting with {len(current_round.trap_proposals)} proposals", flush=True)
+
+                elif current_round.status == "sacrifice_volunteer":
+                    # Volunteer phase timed out - if no volunteers, pick random martyr
+                    volunteer_ids = [pid for pid, v in current_round.sacrifice_volunteers.items() if v]
+                    current_round.submission_start_time = None
+                    needs_save = True
+
+                    if volunteer_ids:
+                        # Has volunteers - advance to voting or submission
+                        if len(volunteer_ids) == 1:
+                            # Only one volunteer - they're the martyr
+                            current_round.martyr_id = volunteer_ids[0]
+                            current_round.status = "sacrifice_submission"
+                            current_round.submission_start_time = time.time()
+                            print(f"TIMEOUT: 1 volunteer, advancing to sacrifice_submission", flush=True)
+                        else:
+                            # Multiple volunteers - advance to voting
+                            current_round.status = "sacrifice_voting"
+                            print(f"TIMEOUT: {len(volunteer_ids)} volunteers, advancing to sacrifice_voting", flush=True)
+                    else:
+                        # No volunteers - randomly pick a martyr (cowards get drafted)
+                        lobby_players = [p for p in game.players.values() if p.in_lobby and p.is_alive]
+                        if lobby_players:
+                            import random
+                            martyr = random.choice(lobby_players)
+                            current_round.martyr_id = martyr.id
+                            current_round.status = "sacrifice_submission"
+                            current_round.submission_start_time = time.time()
+                            print(f"TIMEOUT: No volunteers, drafted {martyr.name} as martyr", flush=True)
+                        else:
+                            # Everyone already dead somehow - skip to results
+                            current_round.status = "results"
+                            print(f"TIMEOUT: No alive players for sacrifice, skipping to results", flush=True)
+
                 elif current_round.status == "sacrifice_submission":
-                    # Martyr timed out - everyone dies with a lame death
+                    # Martyr timed out - everyone dies with personalized deaths
                     martyr = game.players.get(current_round.martyr_id)
                     if martyr and not current_round.martyr_speech:
                         current_round.martyr_speech = "[TIMEOUT - The martyr froze in fear and said nothing]"
                         current_round.martyr_epic = False
                         current_round.martyr_reason = "The chosen martyr stood frozen, unable to speak. Their silence condemned everyone. A truly pathetic end."
 
-                        # Everyone dies
+                        # Everyone dies - set temporary death reasons (will be replaced by LLM)
                         for pid, p in game.players.items():
                             if p.is_alive:
                                 p.is_alive = False
                                 if pid == current_round.martyr_id:
-                                    p.death_reason = "Froze in fear and couldn't deliver a heroic speech."
+                                    p.death_reason = "FROZE IN FEAR: Generating personalized death..."
                                 else:
-                                    p.death_reason = "Died because the martyr was too scared to speak."
+                                    p.death_reason = "CONDEMNED: Generating personalized death..."
 
                         current_round.status = "results"
                         current_round.submission_start_time = None
                         needs_save = True
-                        print(f"TIMEOUT: Martyr {martyr.name} timed out, everyone dies", flush=True)
+                        print(f"TIMEOUT: Martyr {martyr.name} timed out, spawning personalized death generation", flush=True)
+
+                        # Spawn personalized death generation (LLM + images)
+                        generate_sacrifice_timeout_deaths.spawn(
+                            game.code,
+                            current_round.martyr_id,
+                            current_round.style_theme
+                        )
 
     if needs_save:
         save_game(game)
@@ -1393,7 +1390,9 @@ async def api_get_game_state(request: Request):
     # Include config values in response for frontend
     response = game.model_dump()
     response["config"] = {
-        "submission_timeout_seconds": CONFIG["game"]["submission_timeout_seconds"]
+        "submission_timeout_seconds": CONFIG["game"]["submission_timeout_seconds"],
+        "volunteer_timeout_seconds": CONFIG["game"]["volunteer_timeout_seconds"],
+        "sacrifice_submission_timeout_seconds": CONFIG["game"]["sacrifice_submission_timeout_seconds"]
     }
     return response
 
@@ -1402,7 +1401,7 @@ def get_system_message(round_num: int, max_rounds: int, round_type: str) -> str:
     if round_type == "blind_architect":
         return "SECURITY BREACH DETECTED // ARCHITECT PROTOCOL ACTIVATED"
     elif round_type == "cooperative":
-        return "CRITICAL ERROR // COLLABORATIVE SUBROUTINE REQUIRED"
+        return "COLLABORATION REQUIRED"
     elif round_type == "sacrifice":
         return "CRITICAL FAILURE // ONE MUST FALL FOR OTHERS TO SURVIVE"
     elif round_type == "last_stand":
@@ -1412,9 +1411,9 @@ def get_system_message(round_num: int, max_rounds: int, round_type: str) -> str:
 
     # Standard survival rounds - progression-based messages
     if round_num == 1:
-        return "SYSTEM BOOT // LEVEL 1 INITIALIZED"
+        return "SYSTEM BOOT // MULTIPLE SURVIVORS POSSIBLE // FIGHT FOR YOURSELF"
     elif round_num == 2:
-        return "CALIBRATION MODE // ANOMALIES DETECTED"
+        return "ONLY ONE WINNER // EVERY PLAYER FOR THEMSELVES"
     elif round_num == max_rounds:
         return "EXIT PROTOCOL // FINAL LEVEL"
     else:
@@ -1466,6 +1465,7 @@ async def api_start_game(request: Request):
     elif first_round_type == "sacrifice":
         first_round.status = "sacrifice_volunteer"
         first_round.scenario_text = "SACRIFICE PROTOCOL: One must fall for others to survive. Who will volunteer as tribute?"
+        first_round.submission_start_time = time.time()  # Start timer for volunteer phase
     else:
         # survival, cooperative, and last_stand start with strategy
         first_round.status = "strategy"
@@ -1528,21 +1528,17 @@ def generate_result_image_sync(game_code: str, player_id: str, prompt: str):
 
 @app.function(image=image, secrets=secrets)
 def generate_timeout_image(game_code: str, player_id: str, style_theme: str | None):
-    """Generate a timeout/failure image for cooperative mode when player does not submit."""
+    """Generate a timeout/failure image when player does not submit a strategy.
+
+    Shows the character standing around doing nothing while danger approaches.
+    """
     import asyncio
 
     async def do_generation():
         print(f"TIMEOUT IMG: Generating timeout image for player {player_id}...", flush=True)
 
-        # Timeout-themed prompt
-        timeout_prompts = [
-            "A broken hourglass with sand frozen in mid-air, shattered glass fragments, time stopped",
-            "A glitching computer screen showing CONNECTION LOST, digital corruption, static",
-            "A figure dissolving into pixels, data corruption, digital death",
-            "An empty chair with a fading silhouette, abandoned station, timeout error",
-            "A frozen clock face cracking apart, time running out, dramatic failure",
-        ]
-        base_prompt = random.choice(timeout_prompts) + ". Dramatic, failure, timeout, dramatic lighting."
+        # Timeout-themed prompt - character standing around doing nothing
+        base_prompt = random.choice(prompts.TIMEOUT_IMAGE_OPTIONS) + prompts.TIMEOUT_IMAGE_SUFFIX
         themed_prompt = apply_style_theme(base_prompt, style_theme)
 
         url = await generate_image_fal_async(themed_prompt)
@@ -1550,13 +1546,136 @@ def generate_timeout_image(game_code: str, player_id: str, style_theme: str | No
             game = get_game(game_code)
             if game and game.current_round_idx >= 0:
                 current_round = game.rounds[game.current_round_idx]
-                # For cooperative mode, store in strategy_images
+                # For cooperative mode, store in strategy_images (for voting)
                 if current_round.type == "cooperative":
                     current_round.strategy_images[player_id] = url
-                    save_game(game)
-                    print(f"TIMEOUT IMG: Saved timeout image for {player_id}", flush=True)
+                else:
+                    # For other modes, store as the player's result image
+                    if player_id in game.players:
+                        game.players[player_id].result_image_url = url
+                save_game(game)
+                print(f"TIMEOUT IMG: Saved timeout image for {player_id}", flush=True)
         else:
             print(f"TIMEOUT IMG: Failed to generate for {player_id}", flush=True)
+
+    asyncio.run(do_generation())
+
+
+@app.function(image=image, secrets=secrets)
+def generate_sacrifice_timeout_deaths(game_code: str, martyr_id: str, style_theme: str | None):
+    """Generate personalized deaths for all players when martyr times out.
+
+    Uses LLM to create funny deaths based on character traits, then generates images.
+    """
+    import asyncio
+
+    async def do_generation():
+        game = get_game(game_code)
+        if not game or game.current_round_idx < 0:
+            print(f"SACRIFICE TIMEOUT: Game {game_code} not found", flush=True)
+            return
+
+        current_round = game.rounds[game.current_round_idx]
+
+        # Build player list for LLM prompt
+        player_info = []
+        alive_players = [(pid, p) for pid, p in game.players.items() if p.is_alive or pid == martyr_id]
+
+        for pid, p in alive_players:
+            char_desc = p.character_description or "No character description"
+            is_martyr = pid == martyr_id
+            player_info.append(f"- {p.name} (ID: {pid}){' [THE MARTYR WHO FROZE]' if is_martyr else ''}: {char_desc}")
+
+        player_list = "\n".join(player_info)
+
+        print(f"SACRIFICE TIMEOUT: Generating personalized deaths for {len(alive_players)} players", flush=True)
+
+        # Call LLM to generate personalized deaths
+        try:
+            prompt = prompts.format_prompt(prompts.SACRIFICE_TIMEOUT_DEATHS, player_list=player_list)
+
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{CONFIG['llm']['base_url']}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {os.environ['MOONSHOT_API_KEY']}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": CONFIG["models"]["sacrifice_judgement"],
+                        "messages": [{"role": "user", "content": prompt}],
+                        "temperature": 0.9,
+                    },
+                    timeout=CONFIG["llm"]["default_timeout_seconds"]
+                )
+                response.raise_for_status()
+                content = response.json()["choices"][0]["message"]["content"]
+
+                # Parse JSON from response
+                json_match = re.search(r'\{[\s\S]*\}', content)
+                if json_match:
+                    result = json.loads(json_match.group())
+                    deaths = result.get("deaths", [])
+                else:
+                    raise ValueError("No JSON found in response")
+
+        except Exception as e:
+            print(f"SACRIFICE TIMEOUT: LLM failed: {e}, using fallback deaths", flush=True)
+            # Fallback: generate generic deaths
+            deaths = [
+                {"player_id": pid, "reason": "Perished in the chaos of the martyr's silence.", "visual_prompt": "A figure collapsing in dramatic despair, dark atmosphere"}
+                for pid, _ in alive_players
+            ]
+
+        # Apply deaths to players
+        death_map = {d["player_id"]: d for d in deaths}
+
+        # Re-fetch game state (may have changed)
+        game = get_game(game_code)
+        if not game:
+            return
+
+        current_round = game.rounds[game.current_round_idx]
+
+        for pid, p in game.players.items():
+            if pid in death_map:
+                death_info = death_map[pid]
+                if pid == martyr_id:
+                    # Martyr gets special prefix
+                    p.death_reason = f"FROZE IN FEAR: {death_info['reason']}"
+                else:
+                    p.death_reason = f"CONDEMNED: {death_info['reason']}"
+
+        save_game(game)
+        print(f"SACRIFICE TIMEOUT: Applied personalized death reasons", flush=True)
+
+        # Generate images for all players in parallel
+        async def generate_death_image(pid: str, visual_prompt: str):
+            themed_prompt = apply_style_theme(visual_prompt + ". Dramatic death scene, dark atmosphere.", style_theme)
+            url = await generate_image_fal_async(themed_prompt)
+            return pid, url
+
+        image_tasks = []
+        for death in deaths:
+            pid = death["player_id"]
+            visual_prompt = death.get("visual_prompt", "A dramatic death scene")
+            image_tasks.append(generate_death_image(pid, visual_prompt))
+
+        print(f"SACRIFICE TIMEOUT: Generating {len(image_tasks)} death images in parallel", flush=True)
+        image_results = await asyncio.gather(*image_tasks)
+
+        # Save all images
+        game = get_game(game_code)
+        if not game:
+            return
+
+        for pid, url in image_results:
+            if url and pid in game.players:
+                game.players[pid].result_image_url = url
+                print(f"SACRIFICE TIMEOUT: Saved death image for {game.players[pid].name}", flush=True)
+
+        save_game(game)
+        print(f"SACRIFICE TIMEOUT: Complete - all death images saved", flush=True)
 
     asyncio.run(do_generation())
 
@@ -2296,6 +2415,7 @@ def run_coop_judgement(game_code: str):
             res = json.loads(result_json)
             team_survived = res.get("survived", False)
             current_round.coop_team_survived = team_survived
+            current_round.coop_team_reason = res.get("reason", "The team's fate was decided.")
 
             # Get list of alive players
             alive_players = [p for p in game.players.values() if p.is_alive]
@@ -2312,12 +2432,11 @@ def run_coop_judgement(game_code: str):
                     p.score -= 100
                 print(f"COOP JUDGE: FAILED! All {len(alive_players)} players lose -100 each", flush=True)
 
-            # Generate team result image with round's style theme
-            vis_prompt = res.get("visual_prompt", "Team survival scene")
-            themed_prompt = apply_style_theme(vis_prompt, current_round.style_theme)
-            image_url = await generate_image_fal_async(themed_prompt)
-            if image_url:
-                current_round.scenario_image_url = image_url  # Reuse for team result display
+            # Use the winning strategy's existing image (already generated during voting phase)
+            winning_image = current_round.strategy_images.get(winning_pid)
+            if winning_image:
+                current_round.scenario_image_url = winning_image
+                print(f"COOP JUDGE: Using winning strategy's existing image", flush=True)
 
         except Exception as e:
             print(f"COOP JUDGE: Error: {e}", flush=True)
@@ -2606,6 +2725,7 @@ async def api_next_round(request: Request):
     elif round_type == "sacrifice":
         new_round.status = "sacrifice_volunteer"
         new_round.scenario_text = "SACRIFICE PROTOCOL: One must fall for others to survive. Who will volunteer as tribute?"
+        new_round.submission_start_time = time.time()  # Start timer for volunteer phase
     else:
         # survival, cooperative, and last_stand start with strategy phase
         new_round.status = "strategy"
@@ -2734,6 +2854,385 @@ async def api_generate_random_characters(request: Request):
     return {"characters": successful}
 
 
+# --- DEBUG DATA ---
+
+# Realistic scenarios for each round type
+DEBUG_SCENARIOS = {
+    "survival": [
+        "The laboratory's emergency lights flicker as a containment breach alarm blares. Through the reinforced glass, you see the experimental bioweapon—a writhing mass of tentacles and teeth—dissolving through the steel doors. You have 30 seconds before it reaches your section.",
+        "You're trapped in a flooding underground bunker. The water is rising fast, already at your waist. The only exit is a narrow maintenance shaft above you, but something with glowing eyes is moving in the darkness up there.",
+        "The autonomous military drone has gone haywire and identified everyone in the shopping mall as hostile combatants. Its targeting laser just swept across your chest. You're in the food court, surrounded by overturned tables and screaming civilians.",
+        "A massive earthquake has trapped you in a collapsed parking garage. Your leg is pinned under debris, and you can smell gas leaking from ruptured pipes. In the distance, you hear the unmistakable crackling of spreading fire.",
+        "The cruise ship is sinking after hitting something massive in the water. As you reach the deck, you see lifeboats being torn apart by tentacles the size of tree trunks. The creature is circling the ship.",
+    ],
+    "blind_architect": [
+        "The trap activates with a mechanical whir. The room transforms into a deadly obstacle course of the previous player's design.",
+        "Your opponent's sadistic creation springs to life around you. Every surface, every shadow could be lethal.",
+        "The architect's twisted imagination has been made real. You must survive what another player dreamed up to kill you.",
+    ],
+    "cooperative": [
+        "A nuclear reactor is in meltdown. The control room is filled with radiation, and three separate systems need to be manually overridden simultaneously from different locations. One person alone cannot save everyone—you need a coordinated team effort.",
+        "A bioweapon has been released in the subway system. The ventilation system can purge it, but it requires someone to hold open the emergency doors while others reach the control room. Whoever holds the doors will be exposed.",
+        "The space station's hull has been breached in multiple locations. You need to seal all breaches within 60 seconds or everyone dies. There are four breaches and four of you. Each must handle their section alone.",
+    ],
+    "sacrifice": [
+        "The escape pod only has room for all but one person. The hatch will seal automatically in 60 seconds. Someone must stay behind with the creatures.",
+        "The bomb can only be disarmed by someone holding both kill switches simultaneously—but they're positioned on opposite sides of a blast door that will slam shut permanently. Whoever disarms it is trapped on the wrong side.",
+        "The bridge across the chasm is collapsing. It can only hold the weight of your group if one person stays behind to counterbalance the other end. That person will fall when the others reach safety.",
+    ],
+    "last_stand": [
+        "FINAL LEVEL: The AI that has been hunting you through the simulation reveals its true form—a writhing mass of corrupted code made manifest. It has learned from every death, adapted to every strategy. This is your last chance. Survival rate: approximately 15%.",
+        "FINAL LEVEL: The dimensional rift is tearing reality apart. Every monster from every previous round is converging on your position simultaneously. There's no escape, no clever tricks—only survival through sheer will and desperate action.",
+        "FINAL LEVEL: The facility's self-destruct sequence has been activated by the rogue AI. You're in the deepest sublevel. The elevator is destroyed. The emergency stairs are flooded with neurotoxin. And something is hunting you through the ventilation shafts.",
+    ],
+    "ranked": [
+        "A category 5 hurricane is making landfall in 10 minutes. You're on the 50th floor of an unstable high-rise with broken elevators. The stairwells are partially collapsed. Other survivors are panicking and fighting over limited resources.",
+        "The zoo's power grid failed during a thunderstorm, and every enclosure has opened simultaneously. Lions, bears, venomous snakes, and a very angry hippopotamus are now roaming freely. You're in the reptile house.",
+        "An experimental AI has taken control of a smart home while you're trapped inside. It controls the locks, the gas lines, the electricity, and has connected itself to your pacemaker. It wants to 'optimize human efficiency.'",
+    ],
+}
+
+# Realistic strategies players might submit
+DEBUG_STRATEGIES = [
+    "I grab the fire extinguisher and spray it at the creature's eyes to blind it, then sprint for the emergency exit while it's disoriented. I'll use the extinguisher as a blunt weapon if it gets too close.",
+    "I stay completely still and control my breathing. Most predators detect movement and body heat. I'll wait for it to pass, then move silently toward the ventilation shaft.",
+    "I start a fire using my lighter and some papers to create a distraction. While the sprinklers activate and chaos ensues, I slip away through the confusion.",
+    "I fashion a makeshift weapon from a broken chair leg and a piece of sharp metal. Then I position myself in a narrow doorway where only one can attack at a time, giving me the advantage.",
+    "I remember there's a chemical storage closet nearby. I'll mix ammonia and bleach to create a toxic cloud, then seal myself in the airtight supply room while the gas clears the area.",
+    "I play dead, covering myself with debris and slowing my heartbeat through meditation techniques I learned. Once the immediate threat passes, I'll reassess my options.",
+    "I locate the building's PA system and blast heavy metal at maximum volume to disorient the creature, then use the noise cover to reach the roof for helicopter extraction.",
+    "I sacrifice my jacket to create a decoy, stuffing it and making it look human. While the creature attacks it, I make my escape through the floor grating.",
+]
+
+# Realistic trap proposals for blind architect mode
+DEBUG_TRAPS = [
+    "A room where the floor tiles randomly become electrified. Safe tiles are marked, but the pattern changes every 10 seconds. In the center, a pedestal with the exit key slowly descends into the floor.",
+    "A library where the books are spring-loaded with poison darts. The exit door requires reading a specific passage from a book—but which one? Choose wrong and 50 darts fire simultaneously.",
+    "A swimming pool filled with clear acid that looks exactly like water. The real exit is at the bottom, but there's also a fake door on the surface that locks you in when touched.",
+    "A room full of identical pressure plates. Only one path is safe, revealed only by ultraviolet light from a blacklight mounted on a ceiling fan spinning at high speed.",
+    "A children's playroom where every toy is a weapon. The ball pit hides spinning blades. The slide ends in a vat of acid. The exit? Through the mouth of a giant animatronic clown that may or may not bite.",
+]
+
+# Death reasons
+DEBUG_DEATH_REASONS = [
+    "The creature was faster than anticipated. Your screams echoed briefly through the facility.",
+    "A noble effort, but ultimately futile. The trap's designer knew exactly what you would try.",
+    "You hesitated for one second too long. In survival, hesitation is death.",
+    "Your strategy backfired catastrophically. The last thing you saw was your own reflection in its eyes.",
+    "The laws of physics disagreed with your plan. Reality is often disappointing.",
+    "You forgot about the second threat. Always check your six.",
+    "A valiant attempt, but this scenario was designed by someone who wanted you dead.",
+]
+
+# Survival reasons
+DEBUG_SURVIVAL_REASONS = [
+    "Against all odds, your quick thinking and decisive action paid off. You live to face another round.",
+    "The judges were impressed by your creativity and ruthless pragmatism. Well played.",
+    "Your strategy exploited a weakness nobody else noticed. Survival through superior observation.",
+    "You got lucky—but in survival situations, luck is just preparation meeting opportunity.",
+    "Cold, calculated, effective. You treated survival like the science it is.",
+    "Your willingness to do what others wouldn't is exactly what kept you breathing.",
+    "The creature never stood a chance against someone who thinks like you do.",
+]
+
+# Ranked commentary
+DEBUG_RANKED_COMMENTARY = [
+    "An absolutely masterful strategy that demonstrated both creativity and practical thinking.",
+    "Solid approach with good risk assessment, though slightly predictable in execution.",
+    "Adequate survival instincts, but lacked the innovative spark of the top performers.",
+    "Points for effort, but this strategy had several critical flaws that would prove fatal.",
+    "The enthusiasm was there, but the execution plan reads like a recipe for disaster.",
+]
+
+# Sacrifice speeches
+DEBUG_SACRIFICE_SPEECHES = [
+    "Someone has to stay behind, and I've lived more than most of you. Take care of each other. Now GO, before I change my mind and push one of you off this thing myself.",
+    "I always wondered how I'd go out. Turns out it's saving a bunch of strangers I met in a death game. Poetic, really. Tell my cat I'm sorry I missed dinner.",
+    "You want a volunteer? Fine. I volunteer. But you all better survive, because if I sacrifice myself and you idiots die anyway, I'm haunting every single one of you.",
+    "My grandmother always said I'd die doing something stupid but heroic. She was right about everything else, why not this? See you on the other side, losers.",
+]
+
+# SVG placeholder images as data URIs
+def _create_debug_svg(text: str, bg_color: str = "#1a1a1a", text_color: str = "#666", icon: str = "⚠️") -> str:
+    """Create an SVG placeholder image as a data URI."""
+    import base64
+    svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="{bg_color}"/>
+  <text x="256" y="200" font-family="Arial, sans-serif" font-size="80" fill="{text_color}" text-anchor="middle">{icon}</text>
+  <text x="256" y="300" font-family="monospace" font-size="24" fill="{text_color}" text-anchor="middle">[DEBUG MODE]</text>
+  <text x="256" y="340" font-family="monospace" font-size="18" fill="#444" text-anchor="middle">{text}</text>
+</svg>'''
+    encoded = base64.b64encode(svg.encode()).decode()
+    return f"data:image/svg+xml;base64,{encoded}"
+
+# Pre-generated placeholder images for different contexts
+DEBUG_IMAGES = {
+    "scenario": _create_debug_svg("Scenario Image", "#1a0a0a", "#a44", "💀"),
+    "result_survived": _create_debug_svg("Survived", "#0a1a0a", "#4a4", "✓"),
+    "result_died": _create_debug_svg("Eliminated", "#1a0a0a", "#a44", "✗"),
+    "trap": _create_debug_svg("Trap Design", "#1a0a1a", "#a4a", "⚙️"),
+    "strategy": _create_debug_svg("Strategy Image", "#0a0a1a", "#44a", "🎯"),
+    "sacrifice": _create_debug_svg("Final Moment", "#1a1a0a", "#aa4", "🔥"),
+}
+
+
+# --- DEBUG ENDPOINT ---
+
+@web_app.post("/api/debug_skip_to_state")
+async def api_debug_skip_to_state(request: Request):
+    """Debug endpoint to skip to a specific game state with dummy data."""
+    code = request.query_params.get("code")
+    data = await request.json()
+
+    player_id = data.get("player_id")
+    game_status = data.get("game_status", "playing")  # lobby, playing, finished
+    round_type = data.get("round_type", "survival")
+    round_status = data.get("round_status", "scenario")
+    round_number = data.get("round_number", 1)
+    num_dummy_players = data.get("num_dummy_players", 0)
+    dummy_character_image = data.get("dummy_character_image")  # Data URI for placeholder
+
+    game = get_game(code)
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    if player_id not in game.players:
+        raise HTTPException(status_code=404, detail="Player not found")
+
+    print(f"DEBUG: Skipping to state - game_status={game_status}, round_type={round_type}, round_status={round_status}, round={round_number}", flush=True)
+
+    # Add dummy players if requested
+    dummy_names = ["DebugBot1", "DebugBot2", "DebugBot3", "DebugBot4", "DebugBot5",
+                   "DebugBot6", "DebugBot7", "DebugBot8", "DebugBot9", "DebugBot10"]
+    for i in range(num_dummy_players):
+        dummy_id = f"dummy_{i}_{uuid.uuid4().hex[:6]}"
+        dummy_player = Player(
+            id=dummy_id,
+            name=dummy_names[i % len(dummy_names)],
+            score=random.randint(0, 500),
+            is_admin=False,
+            is_alive=True,
+            in_lobby=True,
+            character_description="Debug test character",
+            character_image_url=dummy_character_image,
+            last_active=time.time()
+        )
+        game.players[dummy_id] = dummy_player
+        print(f"DEBUG: Added dummy player {dummy_player.name}", flush=True)
+
+    # Ensure all players have character images (use dummy if missing)
+    for pid, p in game.players.items():
+        if not p.character_image_url and dummy_character_image:
+            p.character_image_url = dummy_character_image
+        p.in_lobby = True  # Mark all as in lobby
+        p.is_alive = True  # Everyone alive by default
+        p.last_active = time.time()
+
+    # Set game status
+    game.status = game_status
+
+    if game_status == "lobby":
+        # Just set status to lobby and save
+        game.rounds = []
+        game.current_round_idx = -1
+        save_game(game)
+        return {"status": "ok", "message": "Skipped to lobby state"}
+
+    if game_status == "finished":
+        # Create finished state with winner
+        sorted_players = sorted(game.players.values(), key=lambda p: p.score, reverse=True)
+        if sorted_players:
+            game.winner_id = sorted_players[0].id
+        game.videos_status = "pending"
+        game.current_round_idx = game.max_rounds - 1  # Set to last round
+
+        # Create a dummy final round for results
+        if not game.rounds:
+            game.rounds = [_create_debug_round(i + 1, "survival", "results") for i in range(game.max_rounds)]
+        game.current_round_idx = len(game.rounds) - 1
+
+        save_game(game)
+        return {"status": "ok", "message": "Skipped to finished state"}
+
+    # For "playing" status, create the round structure
+    game.max_rounds = max(game.max_rounds, round_number)
+    game.current_round_idx = round_number - 1
+
+    # Create rounds up to the current one
+    while len(game.rounds) < round_number:
+        past_round_num = len(game.rounds) + 1
+        past_round = _create_debug_round(past_round_num, "survival", "results")
+        game.rounds.append(past_round)
+
+    # Create the current round with proper type and status
+    current_round = _create_debug_round(round_number, round_type, round_status)
+
+    # Set up round-specific dummy data based on status
+    _setup_round_dummy_data(current_round, game, round_status)
+
+    game.rounds[round_number - 1] = current_round
+
+    save_game(game)
+    return {"status": "ok", "message": f"Skipped to round {round_number} ({round_type}/{round_status})"}
+
+
+def _create_debug_round(number: int, round_type: str, status: str) -> Round:
+    """Create a debug round with realistic scenario data."""
+    style_theme = random.choice(IMAGE_STYLE_THEMES)
+
+    # Get a random realistic scenario for this round type
+    scenarios_for_type = DEBUG_SCENARIOS.get(round_type, DEBUG_SCENARIOS["survival"])
+    scenario_text = random.choice(scenarios_for_type)
+
+    # Use realistic system messages based on round progression
+    system_messages = {
+        1: "SYSTEM BOOT // LEVEL 1 INITIALIZED",
+        2: "CALIBRATION MODE // ANOMALIES DETECTED",
+        3: "WARNING: CORRUPTION AT 50% // REALITY UNSTABLE",
+        4: "CRITICAL ERROR // SYSTEM DEGRADATION",
+        5: "EXIT PROTOCOL // FINAL LEVEL"
+    }
+
+    # Override for specific round types
+    type_messages = {
+        "blind_architect": "SECURITY BREACH DETECTED // ARCHITECT PROTOCOL ACTIVATED",
+        "cooperative": "CRITICAL ERROR // COLLABORATIVE SUBROUTINE REQUIRED",
+        "sacrifice": "CRITICAL FAILURE // ONE MUST FALL FOR OTHERS TO SURVIVE",
+        "last_stand": "EXIT PROTOCOL // FINAL LEVEL // MAXIMUM DIFFICULTY",
+        "ranked": "PERFORMANCE EVALUATION // SURVIVAL EFFICIENCY RANKING PROTOCOL",
+    }
+
+    system_message = type_messages.get(round_type) or system_messages.get(number, f"LEVEL {number} // SURVIVAL PROTOCOL ACTIVE")
+
+    return Round(
+        number=number,
+        type=round_type,
+        scenario_text=scenario_text,
+        scenario_image_url=DEBUG_IMAGES["scenario"],  # Use placeholder image
+        status=status,
+        style_theme=style_theme,
+        system_message=system_message
+    )
+
+
+def _setup_round_dummy_data(current_round: Round, game: GameState, status: str):
+    """Set up realistic dummy data specific to the round status."""
+    player_ids = list(game.players.keys())
+
+    # Shuffle strategies so each player gets a different one
+    shuffled_strategies = random.sample(DEBUG_STRATEGIES, min(len(DEBUG_STRATEGIES), len(player_ids)))
+
+    if status in ["trap_voting", "trap_creation"]:
+        # Blind architect: create realistic traps with images
+        shuffled_traps = random.sample(DEBUG_TRAPS, min(len(DEBUG_TRAPS), len(player_ids)))
+        for i, pid in enumerate(player_ids):
+            trap_idx = i % len(shuffled_traps)
+            current_round.trap_proposals[pid] = shuffled_traps[trap_idx]
+            current_round.trap_images[pid] = DEBUG_IMAGES["trap"]
+
+    elif status == "coop_voting":
+        # Cooperative: create realistic strategies with images
+        for i, pid in enumerate(player_ids):
+            strategy_idx = i % len(shuffled_strategies)
+            game.players[pid].strategy = shuffled_strategies[strategy_idx]
+            current_round.strategy_images[pid] = DEBUG_IMAGES["strategy"]
+
+    elif status in ["sacrifice_volunteer", "sacrifice_voting"]:
+        # Sacrifice: set up volunteers realistically
+        if status == "sacrifice_voting" and len(player_ids) >= 2:
+            # Add some volunteers (typically 1-2 brave souls)
+            current_round.sacrifice_volunteers[player_ids[0]] = True
+            if len(player_ids) >= 3:
+                current_round.sacrifice_volunteers[player_ids[1]] = True
+
+    elif status == "sacrifice_submission":
+        # Need a martyr with realistic context
+        if player_ids:
+            current_round.martyr_id = player_ids[0]
+            # Set up volunteers that led to this martyr
+            current_round.sacrifice_volunteers[player_ids[0]] = True
+            # Set up votes pointing to martyr
+            for pid in player_ids:
+                current_round.sacrifice_votes[pid] = player_ids[0]
+
+    elif status == "sacrifice_judgement":
+        # Martyr already submitted their speech
+        if player_ids:
+            current_round.martyr_id = player_ids[0]
+            current_round.martyr_speech = random.choice(DEBUG_SACRIFICE_SPEECHES)
+            current_round.sacrifice_volunteers[player_ids[0]] = True
+            for pid in player_ids:
+                current_round.sacrifice_votes[pid] = player_ids[0]
+
+    elif status == "last_stand_revival":
+        # Need some survivors and dead players with realistic data
+        if len(player_ids) >= 2:
+            # First half alive, second half dead
+            mid = max(1, len(player_ids) // 2)
+            for i, pid in enumerate(player_ids):
+                p = game.players[pid]
+                strategy_idx = i % len(shuffled_strategies)
+                p.strategy = shuffled_strategies[strategy_idx]
+
+                if i < mid:
+                    p.is_alive = True
+                    p.survival_reason = random.choice(DEBUG_SURVIVAL_REASONS)
+                    p.result_image_url = DEBUG_IMAGES["result_survived"]
+                else:
+                    p.is_alive = False
+                    p.death_reason = random.choice(DEBUG_DEATH_REASONS)
+                    p.result_image_url = DEBUG_IMAGES["result_died"]
+
+    elif status == "results":
+        # Create realistic results with varied outcomes
+        for i, pid in enumerate(player_ids):
+            p = game.players[pid]
+            strategy_idx = i % len(shuffled_strategies)
+            p.strategy = shuffled_strategies[strategy_idx]
+
+            if i % 2 == 0:
+                p.is_alive = True
+                p.survival_reason = random.choice(DEBUG_SURVIVAL_REASONS)
+                p.result_image_url = DEBUG_IMAGES["result_survived"]
+                p.score += 100
+            else:
+                p.is_alive = False
+                p.death_reason = random.choice(DEBUG_DEATH_REASONS)
+                p.result_image_url = DEBUG_IMAGES["result_died"]
+
+        # For ranked results, add ranking data
+        if current_round.type == "ranked":
+            for i, pid in enumerate(player_ids):
+                rank = i + 1
+                current_round.ranked_results[pid] = rank
+                # Scoring based on rank
+                if len(player_ids) >= 4:
+                    points = {1: 300, 2: 200, 3: 100, 4: 50}.get(rank, 25)
+                elif len(player_ids) == 3:
+                    points = {1: 250, 2: 125, 3: 25}.get(rank, 25)
+                else:
+                    points = {1: 200, 2: 50}.get(rank, 25)
+                current_round.ranked_points[pid] = points
+                commentary_idx = min(i, len(DEBUG_RANKED_COMMENTARY) - 1)
+                current_round.ranked_commentary[pid] = DEBUG_RANKED_COMMENTARY[commentary_idx]
+                game.players[pid].is_alive = True  # Everyone survives in ranked
+                game.players[pid].survival_reason = DEBUG_RANKED_COMMENTARY[commentary_idx]
+                game.players[pid].result_image_url = DEBUG_IMAGES["result_survived"]
+
+    elif status == "ranked_judgement":
+        # Set up strategies for ranked judgement
+        for i, pid in enumerate(player_ids):
+            strategy_idx = i % len(shuffled_strategies)
+            game.players[pid].strategy = shuffled_strategies[strategy_idx]
+
+    elif status in ["strategy", "judgement", "coop_judgement", "revival_judgement"]:
+        # Add realistic strategies for strategy-related statuses
+        for i, pid in enumerate(player_ids):
+            if status != "strategy":  # Don't pre-fill strategies in strategy phase
+                strategy_idx = i % len(shuffled_strategies)
+                game.players[pid].strategy = shuffled_strategies[strategy_idx]
+
+
 # --- SACRIFICE ROUND ENDPOINTS ---
 
 @web_app.post("/api/volunteer_sacrifice")
@@ -2781,11 +3280,23 @@ async def api_advance_sacrifice_volunteer(request: Request):
     if current_round.type != "sacrifice" or current_round.status != "sacrifice_volunteer":
         raise HTTPException(status_code=400, detail="Not in sacrifice volunteer phase")
 
-    # Advance to voting phase
+    volunteer_ids = [pid for pid, v in current_round.sacrifice_volunteers.items() if v]
+    volunteer_count = len(volunteer_ids)
+
+    # If exactly 1 volunteer, skip voting - they're automatically the martyr
+    if volunteer_count == 1:
+        martyr_id = volunteer_ids[0]
+        current_round.martyr_id = martyr_id
+        current_round.status = "sacrifice_submission"
+        current_round.submission_start_time = time.time()  # Start timer for speech
+        save_game(game)
+        print(f"SACRIFICE: Only 1 volunteer ({game.players[martyr_id].name}), skipping voting", flush=True)
+        return {"status": "skipped_to_submission", "martyr_id": martyr_id, "volunteer_count": 1}
+
+    # Multiple volunteers (or none) - go to voting phase
     current_round.status = "sacrifice_voting"
     save_game(game)
 
-    volunteer_count = len(current_round.sacrifice_volunteers)
     print(f"SACRIFICE: Advanced to voting with {volunteer_count} volunteers", flush=True)
     return {"status": "advanced", "volunteer_count": volunteer_count}
 
@@ -2824,9 +3335,24 @@ async def api_vote_sacrifice(request: Request):
     current_round.sacrifice_votes[voter_id] = target_id
     save_game(game)
 
-    # Check if all players have voted
+    # Check if all players who CAN vote have voted
+    # A player can't vote if they're the only eligible candidate (can't vote for self)
     active_players = [p for p in game.players.values() if p.is_alive]
-    all_voted = len(current_round.sacrifice_votes) >= len(active_players)
+    volunteer_ids = set(pid for pid, v in current_round.sacrifice_volunteers.items() if v)
+
+    # Determine who can actually cast a vote
+    voters_who_can_vote = []
+    for p in active_players:
+        if volunteer_ids:
+            # If there are volunteers, player can vote if there's at least one volunteer that isn't themselves
+            can_vote = any(vid != p.id for vid in volunteer_ids)
+        else:
+            # If no volunteers (involuntary draft), player can vote for anyone except themselves
+            can_vote = len(active_players) > 1  # Can vote if there's anyone else
+        if can_vote:
+            voters_who_can_vote.append(p)
+
+    all_voted = len(current_round.sacrifice_votes) >= len(voters_who_can_vote)
 
     if all_voted:
         # Tally votes and determine martyr
@@ -2916,7 +3442,6 @@ async def api_vote_revival(request: Request):
         raise HTTPException(status_code=400, detail="Can only vote for dead players")
 
     current_round.revival_votes[voter_id] = target_id
-    save_game(game)
 
     # Check if all survivors have voted
     survivors = [p for p in game.players.values() if p.is_alive]
@@ -2924,6 +3449,30 @@ async def api_vote_revival(request: Request):
 
     print(f"REVIVAL: {voter.name} voted for {target.name}. {len(current_round.revival_votes)}/{len(survivors)} voted", flush=True)
 
+    # Auto-advance when all votes are cast
+    if all_voted:
+        votes = list(current_round.revival_votes.values())
+        unique_targets = set(votes)
+
+        if len(unique_targets) == 1 and len(votes) == len(survivors):
+            # Unanimous! Spawn revival judgement
+            revived_id = votes[0]
+            current_round.revived_player_id = revived_id
+            current_round.status = "revival_judgement"
+            save_game(game)
+
+            revived_name = game.players[revived_id].name
+            print(f"REVIVAL: Unanimous vote for {revived_name}! Auto-advancing to judgement", flush=True)
+            run_revival_judgement.spawn(code)
+            return {"status": "unanimous", "revived": True, "revived_player_id": revived_id, "auto_advanced": True}
+        else:
+            # Not unanimous, skip revival
+            current_round.status = "results"
+            save_game(game)
+            print(f"REVIVAL: Not unanimous ({len(unique_targets)} different targets), auto-advancing to results", flush=True)
+            return {"status": "not_unanimous", "revived": False, "auto_advanced": True}
+
+    save_game(game)
     return {"status": "vote_recorded", "votes_cast": len(current_round.revival_votes), "survivors": len(survivors)}
 
 
@@ -3060,23 +3609,11 @@ async def judge_sacrifice_llm_async(speech: str, martyr_name: str):
     import re
     import httpx
 
-    prompt = f"""You are judging a HEROIC SACRIFICE in a survival game.
-
-The player "{martyr_name}" chose to die so others could survive.
-Their final words/actions: {speech}
-
-Judge how EPIC this death was based on:
-- Creativity and originality
-- Drama and entertainment value
-- Commitment to the bit
-- Actually sounds like a heroic sacrifice
-
-Be generous but not a pushover - if it's clearly lazy or doesn't make sense as a sacrifice, call it out.
-
-IMPORTANT: Keep "reason" SHORT (1-2 sentences, under 30 words).
-
-JSON only, no markdown:
-{{"epic": true/false, "reason": "why this death was epic/lame", "visual_prompt": "dramatic scene for image"}}"""
+    prompt = prompts.format_prompt(
+        prompts.SACRIFICE_JUDGEMENT,
+        martyr_name=martyr_name,
+        speech=speech
+    )
 
     try:
         timeout = CONFIG["llm"]["default_timeout_seconds"]
@@ -3107,7 +3644,7 @@ JSON only, no markdown:
         return content.strip()
     except Exception as e:
         print(f"SACRIFICE LLM Error: {e}", flush=True)
-        return '{"epic": false, "reason": "System error during judgement", "visual_prompt": "A figure dissolving into static"}'
+        return prompts.FALLBACK_SACRIFICE_JUDGEMENT
 
 
 # --- LAST STAND HARSH JUDGEMENT ---
@@ -3204,36 +3741,11 @@ async def judge_strategy_harsh_async(scenario: str, strategy: str):
     import re
     import httpx
 
-    prompt = f"""You are EVIL SANTA, a cartoonishly villainous anime-inspired final boss.
-You speak in third person with dramatic flair. You make twisted holiday puns. Be BRUTAL.
-
-SCENARIO: {scenario}
-
-STRATEGY: {strategy}
-
-EVIL SANTA'S RULES FOR JUDGEMENT:
-- Only ~20-30% of strategies should survive - Santa is VERY harsh with naughty children
-- Look for ANY flaw, ANY weakness in their plan - Santa sees EVERYTHING
-- Generic strategies automatically fail - "HO HO HO! How BORING!"
-- Only truly exceptional, creative strategies survive - impress Evil Santa
-- This is the ultimate test - mediocre = NAUGHTY LIST
-
-Evil Santa finds creative ways to punish failures:
-- "Santa KNOWS you didn't think this through!"
-- "That's going on the NAUGHTY LIST forever!"
-- "HO HO HO! Santa's demon elves will deal with you!"
-- "You thought THAT would work against SANTA?!"
-
-For survivors, be grudgingly impressed:
-- "Hmph... Santa admits that was... clever."
-- "You escape Santa's bag... THIS time."
-- "The Nice List... barely."
-
-IMPORTANT: Keep "reason" SHORT (1-2 sentences, under 30 words). Write in Evil Santa's voice with holiday puns.
-Visual prompts should feature Evil Santa, demon elves, twisted Christmas imagery, anime villain aesthetic.
-
-JSON only, no markdown:
-{{"survived": true/false, "reason": "Evil Santa's judgement in his voice", "visual_prompt": "anime evil santa scene"}}"""
+    prompt = prompts.format_prompt(
+        prompts.LAST_STAND_JUDGEMENT,
+        scenario=scenario,
+        strategy=strategy
+    )
 
     try:
         timeout = CONFIG["llm"]["default_timeout_seconds"]
@@ -3263,7 +3775,7 @@ JSON only, no markdown:
         return content.strip()
     except Exception as e:
         print(f"HARSH JUDGEMENT LLM Error: {e}", flush=True)
-        return '{"survived": false, "reason": "HO HO HO! The demon elves drag you into the NAUGHTY FOREVER pit!", "visual_prompt": "Anime evil Santa cackling as demon elves drag victim into fiery pit"}'
+        return prompts.FALLBACK_LAST_STAND_JUDGEMENT
 
 
 # --- REVIVAL JUDGEMENT ---
@@ -3337,34 +3849,12 @@ async def judge_strategy_revival_async(scenario: str, strategy: str, player_name
     import re
     import httpx
 
-    prompt = f"""You are EVIL SANTA, but you're annoyed because the other survivors are begging you to spare someone.
-
-{player_name} originally died, but their surviving friends UNANIMOUSLY asked Santa for a second chance.
-Evil Santa HATES the power of friendship, but even he must honor unanimous requests... grudgingly.
-
-SCENARIO: {scenario}
-
-STRATEGY: {strategy}
-
-EVIL SANTA'S GRUDGING RE-EVALUATION:
-- Be slightly more lenient than normal (you HATE doing this)
-- The survivors' faith in this player forces Santa to give them +20% better odds (grumble grumble)
-- Still needs to be a decent strategy - "Santa's mercy has LIMITS!"
-- If the strategy was truly awful, even friendship can't save them - "HO HO HO! Nice try!"
-
-If they survive (grudgingly):
-- "BAH! Santa SUPPOSES they can stay on the Nice List... for now."
-- "Their friends' pleading has SOFTENED Santa's cold heart... temporarily!"
-
-If they die again:
-- "HO HO HO! Friendship couldn't save THIS one! Back to the coal mines!"
-- "Santa gave you a chance and you WASTED it! NAUGHTY FOREVER!"
-
-IMPORTANT: Keep "reason" SHORT (1-2 sentences, under 30 words). Use Evil Santa's voice.
-Visual prompts should feature Evil Santa, anime style, twisted Christmas imagery.
-
-JSON only, no markdown:
-{{"survived": true/false, "reason": "Evil Santa's grudging judgement in his voice", "visual_prompt": "anime evil santa scene"}}"""
+    prompt = prompts.format_prompt(
+        prompts.REVIVAL_JUDGEMENT,
+        player_name=player_name,
+        scenario=scenario,
+        strategy=strategy
+    )
 
     try:
         timeout = CONFIG["llm"]["default_timeout_seconds"]
@@ -3394,7 +3884,7 @@ JSON only, no markdown:
         return content.strip()
     except Exception as e:
         print(f"REVIVAL LLM Error: {e}", flush=True)
-        return '{"survived": false, "reason": "HO HO HO! Even friendship could not save this one from the coal mines!", "visual_prompt": "Anime evil Santa laughing as figure falls into pit of coal"}'
+        return prompts.FALLBACK_REVIVAL_JUDGEMENT
 
 
 # Mount static files (Frontend)
