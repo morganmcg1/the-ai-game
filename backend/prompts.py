@@ -360,7 +360,7 @@ CRITICAL: Keep ALL spoken/sung content to {{word_limit}} words MAX or it will be
 - {{duration}}s = {{word_limit}} words maximum
 - For singing: 2-3 short lines only
 
-Choose ONE audio style (vary it, don't always pick the same!):
+Choose ONE audio style, some example are below, but you can riff a on new ones based on these examples:
 
 OPTION A - ANNOUNCER DIALOGUE ({{word_limit}} words max):
 - Booming announcer declares victory
@@ -405,7 +405,7 @@ CRITICAL: Keep ALL spoken/sung content to {{word_limit}} words MAX or it will be
 - {{duration}}s = {{word_limit}} words maximum
 - For singing: 2-3 short lines only
 
-Choose ONE audio style (vary it, don't always pick the same!):
+Choose ONE audio style, some example are below, but you can riff a on new ones based on these examples:
 
 OPTION A - SARCASTIC ANNOUNCER ({{word_limit}} words max):
 - Deadpan or playfully mocking announcer
