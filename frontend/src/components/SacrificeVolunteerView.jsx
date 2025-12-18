@@ -118,7 +118,7 @@ export function SacrificeVolunteerView({ round, playerId, players, isAdmin, onVo
                 borderRadius: '4px',
                 animation: 'flicker 2s infinite'
             }}>
-                &gt; CRITICAL FAILURE // SACRIFICE PROTOCOL INITIATED
+                CRITICAL FAILURE // SACRIFICE PROTOCOL INITIATED
             </div>
 
             <h2 style={{

@@ -145,6 +145,10 @@ The last round type in the array is always used for the final round.
 - 60-second heartbeat timeout for inactive players
 - Inactive players skipped in progression checks
 - Admin manually advances from results to next round
+- **Voting phase timeouts**: All voting phases (trap, coop, sacrifice, revival) auto-resolve after 45 seconds
+  - If votes exist: tally existing votes to determine winner
+  - If no votes: random selection from valid targets
+  - Prevents indefinite hangs when players don't vote
 
 ### Player States
 - `is_alive`: Tracked per round
@@ -194,6 +198,7 @@ System messages displayed based on round progression:
 - Framer Motion for animations
 - Lucide React for icons
 - Keyboard shortcuts (Cmd+Enter) on key buttons
+- Timeout-based fallback UI when async operations fail (e.g., CoopVotingView shows text-based voting if images don't load within 30s)
 
 ### Backend (`backend/app.py`)
 
@@ -260,7 +265,7 @@ All configurable values are centralized in `config.yaml`:
 
 | Section | Settings |
 |---------|----------|
-| `game` | Timers, round count, heartbeat timeout |
+| `game` | Timers (submission, volunteer, sacrifice, vote), round count, heartbeat timeout |
 | `llm` | API URLs, timeouts |
 | `models` | LLM model names per use case |
 | `image_generation` | FAL settings, image size, inference steps |
@@ -361,7 +366,7 @@ modal secret create ai-game-secrets MOONSHOT_API_KEY=xxx FAL_KEY=xxx --env ai-ga
 
 **Persistent Storage:** Uses `modal.Dict` for game state:
 ```python
-games = modal.Dict.from_name("mas-ai-games", create_if_missing=True)
+games = modal.Dict.from_name("survaive-games", create_if_missing=True)
 ```
 
 **Async Functions:** Modal functions can be spawned with `.spawn()` for fire-and-forget execution:
@@ -375,6 +380,56 @@ games = modal.Dict.from_name("mas-ai-games", create_if_missing=True)
 - `run_last_stand_judgement.spawn()` - Harsh final boss judgement
 - `run_revival_judgement.spawn()` - Re-judge revived player with bonus
 - `generate_all_player_videos.spawn()` - Generate end-game videos
+
+### Retry-Verify Pattern for Vote Endpoints
+
+Due to Modal Dict's eventual consistency, vote endpoints use a retry-verify pattern to ensure votes are persisted:
+
+```python
+max_retries = 10
+for attempt in range(max_retries):
+    game = get_game(code)
+
+    # Idempotent check - already voted?
+    if voter_id in round.votes and round.votes[voter_id] == target_id:
+        return {"status": "voted"}
+
+    round.votes[voter_id] = target_id
+    save_game(game)
+
+    # Verify with jitter
+    await asyncio.sleep(0.1 + random.uniform(0.05, 0.15))
+    verification = get_game(code)
+    if verification and voter_id in v_round.votes:
+        return {"status": "voted"}
+
+    # Exponential backoff
+    backoff = (0.15 * (2 ** attempt)) + random.uniform(0, 0.1)
+    await asyncio.sleep(min(backoff, 2.0))
+
+raise HTTPException(500, "Failed to record vote")
+```
+
+This pattern is used in: `api_vote_trap`, `api_vote_coop`, `api_vote_sacrifice`, `api_vote_revival`
+
+### Round Index Verification for Background Tasks
+
+Background Modal functions can become "stale" if triggered for a round that has already advanced. All spawned functions verify they're operating on the expected round:
+
+```python
+@app.function()
+def run_round_judgement(game_code: str, expected_round_idx: int = -1):
+    game = get_game(game_code)
+
+    # Prevent stale task from mutating wrong round
+    if expected_round_idx >= 0 and game.current_round_idx != expected_round_idx:
+        print(f"Round mismatch! Expected {expected_round_idx}, got {game.current_round_idx}. Aborting.")
+        return
+
+    # ... proceed with judgement
+```
+
+All `.spawn()` calls pass `game.current_round_idx` as the second argument.
 
 ### LLM Integration Notes
 
@@ -423,6 +478,8 @@ if all_strategies_submitted(game):
 save_game(game)  # Save once at the end
 ```
 
+For critical operations (votes, joins), use the retry-verify pattern with exponential backoff. See "Retry-Verify Pattern for Vote Endpoints" in Implementation Patterns.
+
 ### Frontend Polling Race Conditions
 
 **Problem:** After submitting data, the next poll response might arrive before the server has processed/saved the submission.
@@ -451,12 +508,57 @@ if all_dead:
     current_round.status = "results"  # Skip judgement
 else:
     current_round.status = "judgement"
-    run_round_judgement.spawn(game.code)
+    run_round_judgement.spawn(game.code, game.current_round_idx)
 ```
+
+**Important:** Always pass `game.current_round_idx` to spawned functions. This prevents stale background tasks from mutating the wrong round if the game has advanced. See "Round Index Verification for Background Tasks" in Implementation Patterns.
 
 ### Timeout Images
 
 Timeout images are generated for ALL round types (not just cooperative) via `generate_timeout_image.spawn()`. The images show characters "doing nothing" while death approaches - see `TIMEOUT_IMAGE_OPTIONS` in `prompts.py` for the prompt options.
+
+### Voting Phase Timeouts
+
+**Problem:** Voting phases (trap_voting, coop_voting, sacrifice_voting, last_stand_revival) can hang indefinitely if players don't vote.
+
+**Solution:** All voting phases have a 45-second timeout (configurable via `vote_timeout_seconds`). The timeout is tracked via `vote_start_time` on the Round model. When timeout triggers:
+
+1. **trap_voting**: Winner determined from existing votes, or random trap if no votes
+2. **coop_voting**: Winner determined from existing votes, or random player if no votes
+3. **sacrifice_voting**: Martyr determined from existing votes, or random volunteer (or random player if no volunteers)
+4. **last_stand_revival**: No revival occurs (unanimity impossible without all votes)
+
+### Single-Player Cooperative Mode
+
+**Edge Case:** If only 1 player is alive during cooperative mode, voting is skipped entirely (self-voting is rejected anyway).
+
+**Solution:** When transitioning to coop_voting with ≤1 alive player:
+- The single player auto-wins voting with +200 points
+- Status jumps directly to `coop_judgement`
+- Prevents hang from impossible voting scenario
+
+### UI Fallback for Failed Async Operations
+
+**Problem:** If image generation fails or times out, UI can show indefinite loading states.
+
+**Solution:** Components implement timeout-based fallbacks:
+
+```jsx
+// CoopVotingView.jsx
+const [showFallback, setShowFallback] = useState(false);
+
+useEffect(() => {
+    if (entries.length === 0) {
+        const timer = setTimeout(() => setShowFallback(true), 30000);
+        return () => clearTimeout(timer);
+    }
+}, [entries.length]);
+
+// If no images after 30s, show text-based voting UI
+if (entries.length === 0 && showFallback) {
+    return <TextBasedVotingUI />;
+}
+```
 
 ---
 
@@ -532,6 +634,7 @@ scenario_text: str
 scenario_image_url: str | None
 style_theme: str | None      # Visual style for all images in round
 system_message: str | None   # Narrative progression text
+vote_start_time: float | None  # When voting phase started (for timeout)
 
 # Blind Architect specific
 architect_id: str | None

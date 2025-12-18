@@ -96,7 +96,7 @@ export function InputView({ round, playerId, onSubmit, flatTop = false, config =
             </div>
 
             <h3 style={{ fontFamily: 'monospace', color: 'var(--secondary)' }}>SURVIVAL PROTOCOL</h3>
-            <p className="hint-text" style={{ fontFamily: 'monospace' }}>&gt; Input your survival strategy. Be creative to maintain data integrity...</p>
+            <p className="hint-text" style={{ fontFamily: 'monospace' }}>Input your survival strategy.</p>
             <div className="input-wrapper">
                 <textarea
                     value={strategy}

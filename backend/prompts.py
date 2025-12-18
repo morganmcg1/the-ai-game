@@ -27,6 +27,7 @@ Create a SHORT scenario (2-3 sentences) with:
 1. A CLEAR THREAT the player must deal with (monster, trap, disaster, enemy, etc.)
 2. A SPECIFIC SETTING (jungle temple, space station, haunted mansion, medieval dungeon, etc.)
 3. ONE subtle "wrongness" that hints something is off (wrong colors, impossible geometry, repeating patterns)
+4. END WITH A CALL TO ACTION - a direct question asking what they'll do. Ensure to put this call to action in a new paragraph.
 
 The scenario must give players something ACTIONABLE to respond to - they should be able to:
 - Fight or flee from something
@@ -35,16 +36,33 @@ The scenario must give players something ACTIONABLE to respond to - they should 
 - Use an object or tool creatively
 - Make a clever observation or joke
 
-GOOD examples (clear threats, actionable):
-- "You're in a flooding submarine. Water pours through a crack in the hull. The emergency hatch is jammed, and something large just bumped the hull from outside."
-- "A masked killer blocks the cabin door, machete raised. The window behind you is small but breakable. The killer tilts their head the same way every 3 seconds, like a broken animatronic."
-- "You wake up strapped to a table in a mad scientist's lab. A laser is slowly moving toward you. The scientist is monologuing but keeps repeating the same sentence."
+CALL TO ACTION EXAMPLES (vary these - don't repeat the same one!):
+- "How will you escape?"
+- "What's your plan to survive?"
+- "How do you defeat this threat?"
+- "What will you do?"
+- "How will you get out of this?"
+- "What's your move?"
+- "How do you handle this?"
+- "What brilliant (or stupid) idea saves you?"
+- "How do you talk your way out?"
+- "What do you grab and why?"
+- "Fight, flee, or something weirder?"
+- "Sing, dance, or die trying?"
+- "How will you outsmart them?"
+- "What's your survival strategy?"
 
-BAD examples (too vague, no clear action):
+GOOD examples (clear threats, actionable, with call to action):
+- "You're in a flooding submarine. Water pours through a crack in the hull. The emergency hatch is jammed, and something large just bumped the hull from outside. How will you escape before you drown?"
+- "A masked killer blocks the cabin door, machete raised. The window behind you is small but breakable. The killer tilts their head the same way every 3 seconds, like a broken animatronic. What's your move?"
+- "You wake up strapped to a table in a mad scientist's lab. A laser is slowly moving toward you. The scientist is monologuing but keeps repeating the same sentence. How do you get out of this?"
+
+BAD examples (too vague, no clear action, no call to action):
 - "You're in a forest and shadows are purple and you're holding random objects" (no clear threat)
 - "Reality feels wrong and things keep shifting" (nothing to do)
 
 Write in second person ("You are...", "You find yourself...")
+ALWAYS end with a question that prompts the player to respond.
 
 Generate ONLY the scenario, nothing else:"""
 
@@ -55,6 +73,7 @@ Create a SHORT scenario (2-3 sentences) with:
 1. EVIL SANTA as the main threat - he's cartoonishly villainous, anime-inspired, over-the-top evil
 2. Setting: His twisted workshop/lair (corrupted North Pole, nightmare factory, etc.)
 3. He should be doing something menacing but absurdly dramatic (cackling, monologuing, etc.)
+4. END WITH A CALL TO ACTION - a direct question asking what they'll do
 
 Evil Santa personality traits to include:
 - Speaks in third person ("SANTA SEES ALL!")
@@ -63,11 +82,19 @@ Evil Santa personality traits to include:
 - His elves are now demonic minions
 - His bag contains weapons/traps instead of presents
 
-GOOD examples:
-- "Evil Santa's eyes glow crimson as he rises from his throne of frozen skulls. 'HO HO HO! Santa knows when you've been SLEEPING!' He hurls razor-sharp candy canes while his demon elves cackle."
-- "You stand in Santa's nightmare workshop. Conveyor belts carry screaming gingerbread men into furnaces. Evil Santa adjusts his blood-red hat and grins. 'COAL? No no no... Santa has something SPECIAL for naughty children.'"
+CALL TO ACTION EXAMPLES (vary these!):
+- "How will you defeat Evil Santa?"
+- "What's your plan to survive this nightmare Christmas?"
+- "How do you escape the workshop of doom?"
+- "Do you fight, flee, or try something festively insane?"
+- "How will you get off Santa's naughty list... permanently?"
+
+GOOD examples (with call to action):
+- "Evil Santa's eyes glow crimson as he rises from his throne of frozen skulls. 'HO HO HO! Santa knows when you've been SLEEPING!' He hurls razor-sharp candy canes while his demon elves cackle. How will you survive this nightmare Christmas?"
+- "You stand in Santa's nightmare workshop. Conveyor belts carry screaming gingerbread men into furnaces. Evil Santa adjusts his blood-red hat and grins. 'COAL? No no no... Santa has something SPECIAL for naughty children.' What's your plan to escape?"
 
 Write in second person ("You are...", "You find yourself...")
+ALWAYS end with a question that prompts the player to respond.
 
 Generate ONLY the scenario, nothing else:"""
 
@@ -171,6 +198,11 @@ JSON only, no markdown:
 {{"epic": true/false, "reason": "why this death was epic/lame", "visual_prompt": "dramatic scene for image"}}"""
 
 
+SACRIFICE_SURVIVOR_IMAGE = """{{player_name}} watching in relief as a heroic sacrifice saves their life. They witness the dramatic moment of salvation amid {{scenario_hint}}"""
+
+SACRIFICE_FAILED_DEATH_IMAGE = """{{player_name}} facing their doom after a failed sacrifice attempt. Everyone perishes together in {{scenario_hint}}"""
+
+
 # =============================================================================
 # LAST STAND (EVIL SANTA) PROMPTS
 # =============================================================================
@@ -241,23 +273,166 @@ JSON only, no markdown:
 # VIDEO GENERATION PROMPTS
 # =============================================================================
 
-VIDEO_SCRIPT_GENERATION = """You are writing a very short video script for a game called "SurvAIve".
-The game's premise: Players were consciousness fragments trapped in a corrupted AI simulation.
-They've now escaped (or been extracted) after surviving deadly levels.
+# Announcer voice options for variety - used in video generation
+ANNOUNCER_VOICES = [
+    "booming male voice, dramatic game show host energy",
+    "enthusiastic female voice, hyped up sports announcer",
+    "deadpan male voice, dry sarcastic wit",
+    "regal female voice, slow and proud",
+    "deep gravelly male voice, action movie trailer narrator",
+    "bright cheerful female voice, over-the-top excited",
+    "smooth male voice, late night talk show host charm",
+    "sassy female voice, reality TV host with attitude",
+]
 
-The video theme/setting is: {{video_theme}}
+# Audio types for video variety (based on Kling v2.6 capabilities)
+# - DIALOGUE: Announcer speaks lines with specific voice
+# - SINGING: Character or announcer sings a short jingle/ballad
+# - NARRATION: Dramatic voiceover with ambient sounds
+VIDEO_AUDIO_TYPES = ["dialogue", "dialogue", "dialogue", "singing", "narration"]  # weighted toward dialogue
+
+
+def get_word_limit_for_duration(duration_seconds: int) -> int:
+    """Calculate approximate word limit for a given video duration.
+
+    Based on average speech rate of ~2.5 words per second, with some buffer
+    for pauses, sound effects, and natural pacing.
+
+    Args:
+        duration_seconds: Video duration in seconds
+
+    Returns:
+        Recommended maximum word count for spoken/sung content
+    """
+    # ~2.5 words/sec, but leave room for pauses and SFX
+    # Use 2 words/sec as conservative estimate
+    return int(duration_seconds * 2)
+
+VIDEO_SCRIPT_GENERATION = """You are writing a video script for a game show awards ceremony.
+The setting/theme is: {{video_theme}}
 
 Context: {{context}}
 
+PRONUNCIATION: If the player's name is unusual, non-English, or might be mispronounced, write it PHONETICALLY in the audio field.
+Examples: "Xiaowei" → "Shao-way", "Nguyen" → "Win", "Siobhan" → "Shiv-awn", "Aoife" → "Ee-fa"
+If the name is simple/common (e.g., "Bob", "Alice", "Mike"), use it as-is.
+
+VIDEO DURATION: {{duration}} seconds
+IMPORTANT: Keep spoken/sung content to {{word_limit}} words MAX or it will be cut off!
+- {{duration}}s video ≈ {{word_limit}} words of speech
+- For singing: 2-4 short lines max
+
 Generate a JSON response with:
-1. "scene": A 1-sentence visual description of what's happening (must fit the theme: {{video_theme}})
-2. "dialogue": A short spoken announcement (2-3 sentences max, must include the player's name "{{player_name}}")
+1. "scene": A 1-sentence visual description (action, movement, what the camera sees)
+2. "audio_type": Either "dialogue", "singing", or "narration"
+3. "audio": The spoken/sung content ({{word_limit}} words MAX, must include "{{player_name}}")
+4. "voice": Voice characteristics (e.g.:
+    - "booming male voice",
+    - "operatic female voice",
+    - "booming male voice, dramatic game show host energy",
+    - "enthusiastic female voice, hyped up sports announcer",
+    - "deadpan male voice, dry sarcastic wit",
+    - "regal female voice, slow and proud",
+    - "deep gravelly male voice, action movie trailer narrator",
+    - "bright cheerful female voice, over-the-top excited",
+    - "smooth male voice, late night talk show host charm",
+    - "sassy female voice, reality TV host with attitude",
+5. "sfx": Sound effects and ambient sounds (e.g., "crowd cheering, confetti cannons, triumphant horns")
 
 The tone should be: {{tone}}
-Include subtle references to escaping, data integrity, or consciousness extraction where appropriate.
 
 Respond with ONLY valid JSON, no markdown:
-{{"scene": "...", "dialogue": "..."}}"""
+{{"scene": "...", "audio_type": "...", "audio": "...", "voice": "...", "sfx": "..."}}"""
+
+
+VIDEO_SCRIPT_WINNER = """You are writing a TRIUMPHANT video script for a game show CHAMPION.
+The setting/theme is: {{video_theme}}
+
+Player name: {{player_name}}
+
+PRONUNCIATION: If the player's name is unusual, non-English, or might be mispronounced, write it PHONETICALLY in the audio field.
+Examples: "Xiaowei" → "Shao-way", "Nguyen" → "Win", "Siobhan" → "Shiv-awn", "Aoife" → "Ee-fa"
+If the name is simple/common (e.g., "Bob", "Alice", "Mike"), use it as-is.
+
+VIDEO DURATION: {{duration}} seconds
+CRITICAL: Keep ALL spoken/sung content to {{word_limit}} words MAX or it will be cut off!
+- Speech pace: ~2.5 words per second
+- {{duration}}s = {{word_limit}} words maximum
+- For singing: 2-3 short lines only
+
+Choose ONE audio style (vary it, don't always pick the same!):
+
+OPTION A - ANNOUNCER DIALOGUE ({{word_limit}} words max):
+- Booming announcer declares victory
+- Voice: "booming male voice, sports announcer energy" or "enthusiastic female voice, game show host"
+- Example: "{player_name} HAS DONE IT! Against all odds, YOUR CHAMPION!"
+
+OPTION B - VICTORY SINGING (2-3 short lines):
+- Character sings a triumphant jingle (keep it SHORT - 15-20 words total)
+- Voice: "operatic male voice" or "pop diva female voice"
+- Example: "I am the champion! Victory is sweet! {player_name} cannot be beat!"
+
+OPTION C - EPIC NARRATION ({{word_limit}} words max):
+- Movie-trailer style voiceover
+- Voice: "deep gravelly male voice, movie trailer narrator"
+- Example: "In a world of chaos... one rose above. {player_name}. Champion."
+
+Generate a JSON response:
+1. "scene": Visual description - VICTORY moment (pyrotechnics, confetti, crowd, spotlights)
+2. "audio_type": "dialogue" or "singing" or "narration"
+3. "audio": The spoken/sung content ({{word_limit}} WORDS MAX, must include "{{player_name}}")
+4. "voice": Specific voice characteristics
+5. "sfx": Sound effects - "pyrotechnics, crowd roaring, triumphant music"
+
+Make them feel like an ABSOLUTE LEGEND!
+
+Respond with ONLY valid JSON, no markdown:
+{{"scene": "...", "audio_type": "...", "audio": "...", "voice": "...", "sfx": "..."}}"""
+
+
+VIDEO_SCRIPT_LOSER = """You are writing a CONSOLING but HUMOROUS video script for a game show NON-WINNER.
+The setting/theme is: {{video_theme}}
+
+Player name: {{player_name}}
+
+PRONUNCIATION: If the player's name is unusual, non-English, or might be mispronounced, write it PHONETICALLY in the audio field.
+Examples: "Xiaowei" → "Shao-way", "Nguyen" → "Win", "Siobhan" → "Shiv-awn", "Aoife" → "Ee-fa"
+If the name is simple/common (e.g., "Bob", "Alice", "Mike"), use it as-is.
+
+VIDEO DURATION: {{duration}} seconds
+CRITICAL: Keep ALL spoken/sung content to {{word_limit}} words MAX or it will be cut off!
+- Speech pace: ~2.5 words per second
+- {{duration}}s = {{word_limit}} words maximum
+- For singing: 2-3 short lines only
+
+Choose ONE audio style (vary it, don't always pick the same!):
+
+OPTION A - SARCASTIC ANNOUNCER ({{word_limit}} words max):
+- Deadpan or playfully mocking announcer
+- Voice: "deadpan female voice, dry sarcastic wit" or "male voice, fake sympathetic"
+- Example: "{player_name}... you showed up. That's... something. Here's your tiny trophy."
+
+OPTION B - SAD CONSOLATION BALLAD (2-3 short lines, ~15-20 words):
+- Melodramatic sad song about their loss (funny, not actually sad)
+- Voice: "dramatic operatic voice, over-the-top emotional" or "country twang"
+- Example: "I didn't win, but I'm still here! {player_name} sheds no tear!"
+
+OPTION C - DOCUMENTARY NARRATION ({{word_limit}} words max):
+- Nature documentary style about a "failed specimen"
+- Voice: "British male voice, David Attenborough style"
+- Example: "Here we observe the rare participation trophy recipient. {player_name}. Fascinating."
+
+Generate a JSON response:
+1. "scene": Visual description - CONSOLATION moment (tiny trophy, sad balloon, awkward applause)
+2. "audio_type": "dialogue" or "singing" or "narration"
+3. "audio": The spoken/sung content ({{word_limit}} WORDS MAX, must include "{{player_name}}")
+4. "voice": Specific voice characteristics
+5. "sfx": Sound effects - "sad trombone, single clap, balloon deflating, crickets"
+
+Be GENTLY ROASTING but still fun. They should LAUGH at their loss!
+
+Respond with ONLY valid JSON, no markdown:
+{{"scene": "...", "audio_type": "...", "audio": "...", "voice": "...", "sfx": "..."}}"""
 
 
 # =============================================================================
@@ -280,7 +455,20 @@ COOP_STRATEGY_IMAGE = """Survival strategy illustration: {{strategy}}. Dramatic 
 VIDEO_BASE_IMAGE = """{{scene}}. Setting: {{video_theme}}. Cinematic, dramatic lighting, vivid colors."""
 
 
-VIDEO_GENERATION = """{{scene}} An announcer says "{{dialogue}}" Setting: {{video_theme}}"""
+# Kling v2.6 Pro video prompt templates - follows their recommended format
+# These are built dynamically based on audio_type
+
+# For dialogue: [Character, voice]: "spoken words"
+VIDEO_GENERATION_DIALOGUE = """{{scene}}. [Announcer, {{voice}}]: "{{audio}}" Setting: {{video_theme}}. Background sounds: {{sfx}}"""
+
+# For singing: [Character, voice] sings: "lyrics"
+VIDEO_GENERATION_SINGING = """{{scene}}. [{{voice}}] sings: "{{audio}}" Setting: {{video_theme}}. Background sounds: {{sfx}}"""
+
+# For narration: dramatic voiceover with ambient
+VIDEO_GENERATION_NARRATION = """{{scene}}. [Narrator, {{voice}}]: "{{audio}}" Setting: {{video_theme}}. Ambient sounds: {{sfx}}"""
+
+# Legacy format (for backwards compatibility)
+VIDEO_GENERATION = """{{scene}}. [Announcer, {{voice}}]: "{{audio}}" Setting: {{video_theme}}. Background: Crowd cheering, dramatic music."""
 
 
 # Timeout image prompts - for players who didn't submit a strategy (stood around doing nothing)
@@ -318,8 +506,27 @@ FALLBACK_LAST_STAND_JUDGEMENT = '{"survived": false, "reason": "HO HO HO! The de
 FALLBACK_REVIVAL_JUDGEMENT = '{"survived": false, "reason": "HO HO HO! Even friendship could not save this one from the coal mines!", "visual_prompt": "Anime evil Santa laughing as figure falls into pit of coal"}'
 
 FALLBACK_VIDEO_SCRIPT = {
-    "scene": "A ceremony stage with spotlights and digital confetti",
-    "dialogue": "EXIT PROTOCOL COMPLETE. {player_name}, your consciousness has been successfully extracted! You are the primary survivor of the corrupted simulation!"
+    "scene": "A ceremony stage with spotlights, confetti cannons firing, crowd on their feet",
+    "audio_type": "dialogue",
+    "audio": "Ladies and gentlemen, put your hands together for {player_name}! What a performance!",
+    "voice": "enthusiastic male voice, game show host energy",
+    "sfx": "crowd cheering, confetti cannons, triumphant music"
+}
+
+FALLBACK_WINNER_VIDEO_SCRIPT = {
+    "scene": "A champion stands on a golden podium as fireworks explode and confetti rains down, crowd going wild",
+    "audio_type": "dialogue",
+    "audio": "{player_name} HAS DONE IT! Against all odds, they've claimed VICTORY! Give it up for your CHAMPION!",
+    "voice": "booming male voice, dramatic sports announcer",
+    "sfx": "pyrotechnics explosions, crowd roaring, triumphant orchestral hit"
+}
+
+FALLBACK_LOSER_VIDEO_SCRIPT = {
+    "scene": "A figure shuffles onto stage to receive a tiny participation trophy, scattered polite applause, sad single balloon",
+    "audio_type": "dialogue",
+    "audio": "{player_name}... hey, you showed up! That's... that's something. Here's your participation trophy. Try not to lose it.",
+    "voice": "deadpan female voice, dry sarcastic wit",
+    "sfx": "sad trombone, single person clapping slowly, balloon deflating"
 }
 
 
@@ -333,13 +540,45 @@ def build_video_context(player_name: str, rank: int, total_players: int, score: 
     is_last = rank == total_players
 
     if is_winner:
-        context = f"{player_name} has completed the EXIT PROTOCOL! They escaped the corrupted simulation with {score} data integrity points. Their consciousness has been successfully extracted."
-        tone = "triumphant, epic, with subtle digital/simulation undertones"
+        context = f"{player_name} is THE CHAMPION! They dominated the competition with {score} points. This is their victory moment!"
+        tone = "triumphant, epic, over-the-top celebratory"
     elif is_last:
-        context = f"{player_name}'s data was nearly corrupted beyond recovery. They finished last with {score} points but their consciousness fragment was salvaged."
-        tone = "consoling but humorous, gentle roasting, with simulation flavor"
+        context = f"{player_name} finished in last place with {score} points. They tried their best... kind of."
+        tone = "consoling but humorous, gentle roasting, playfully sarcastic"
     else:
-        context = f"{player_name} achieved partial extraction, finishing in position {rank} out of {total_players} with {score} integrity points."
-        tone = "acknowledging, mildly congratulatory, with digital undertones"
+        context = f"{player_name} finished in position {rank} out of {total_players} with {score} points. Not first, not last."
+        tone = "acknowledging, mildly congratulatory, slightly underwhelming"
 
     return context, tone
+
+
+def build_video_prompt(script_data: dict, video_theme: str) -> str:
+    """Build the final Kling v2.6 Pro video prompt based on audio_type.
+
+    Args:
+        script_data: Dict with scene, audio_type, audio, voice, sfx
+        video_theme: The visual theme/setting
+
+    Returns:
+        Formatted prompt string for Kling video generation
+    """
+    scene = script_data.get("scene", "A ceremony stage with spotlights")
+    audio_type = script_data.get("audio_type", "dialogue")
+    audio = script_data.get("audio", "")
+    voice = script_data.get("voice", "enthusiastic announcer voice")
+    sfx = script_data.get("sfx", "crowd cheering, dramatic music")
+
+    # Handle legacy format (dialogue field instead of audio)
+    if not audio and "dialogue" in script_data:
+        audio = script_data["dialogue"]
+        audio_type = "dialogue"
+
+    if audio_type == "singing":
+        # Singing format: character sings lyrics
+        return f'{scene}. [{voice}] sings: "{audio}" Setting: {video_theme}. Background sounds: {sfx}'
+    elif audio_type == "narration":
+        # Narration format: dramatic voiceover
+        return f'{scene}. [Narrator, {voice}]: "{audio}" Setting: {video_theme}. Ambient sounds: {sfx}'
+    else:
+        # Default dialogue format
+        return f'{scene}. [Announcer, {voice}]: "{audio}" Setting: {video_theme}. Background sounds: {sfx}'

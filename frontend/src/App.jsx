@@ -557,8 +557,25 @@ function App() {
     const sortedPlayers = Object.values(gameState.players).sort((a, b) => b.score - a.score);
     const winner = sortedPlayers[0];
     const videoStatus = gameState.videos_status || 'pending';
-    const playerVideos = gameState.player_videos || {};
-    const hasAnyVideos = Object.keys(playerVideos).length > 0;
+
+    // Get the appropriate video for each player based on their final ranking
+    // Winner (rank 1) gets winner video, everyone else gets loser video
+    const winnerVideos = gameState.player_winner_videos || {};
+    const loserVideos = gameState.player_loser_videos || {};
+
+    // Build playerVideos map: winner gets winner video, everyone else gets loser video
+    const playerVideos = {};
+    sortedPlayers.forEach((player, index) => {
+      if (index === 0) {
+        // Winner gets winner video
+        playerVideos[player.id] = winnerVideos[player.id];
+      } else {
+        // Everyone else gets loser video
+        playerVideos[player.id] = loserVideos[player.id];
+      }
+    });
+
+    const hasAnyVideos = Object.values(playerVideos).filter(v => v).length > 0;
 
     const handleRetryVideos = async () => {
       if (gameCode) {
@@ -572,7 +589,7 @@ function App() {
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2rem', padding: '2rem' }}>
         <h1 className="glitch-text" style={{ fontSize: '3rem', textAlign: 'center' }}>EXIT PROTOCOL COMPLETE</h1>
         <p style={{ fontFamily: 'monospace', color: '#0f0', textAlign: 'center', marginTop: '-1rem' }}>
-          &gt; SIMULATION TERMINATED // CONSCIOUSNESS EXTRACTION IN PROGRESS
+          SIMULATION TERMINATED // CONSCIOUSNESS EXTRACTION IN PROGRESS
         </p>
 
         {/* Video section - show based on status */}
@@ -580,8 +597,15 @@ function App() {
           <VideoWaitingCard playerCount={sortedPlayers.length} />
         )}
 
-        {videoStatus === 'ready' && hasAnyVideos && (
-          <PlayerVideoCarousel sortedPlayers={sortedPlayers} playerVideos={playerVideos} />
+        {(videoStatus === 'ready' || videoStatus === 'partial') && hasAnyVideos && (
+          <>
+            <PlayerVideoCarousel sortedPlayers={sortedPlayers} playerVideos={playerVideos} />
+            {videoStatus === 'partial' && (
+              <p style={{ color: '#888', fontSize: '0.85rem', textAlign: 'center', marginTop: '-1rem' }}>
+                Note: Some videos failed to generate
+              </p>
+            )}
+          </>
         )}
 
         {videoStatus === 'failed' && (
@@ -602,11 +626,11 @@ function App() {
         )}
 
         {/* Winner card - show if videos not ready yet */}
-        {(videoStatus !== 'ready' || !hasAnyVideos) && (
+        {((videoStatus !== 'ready' && videoStatus !== 'partial') || !hasAnyVideos) && (
           <div className="card" style={{ textAlign: 'center', padding: '2rem', border: '2px solid #FFD700' }}>
             <h2 style={{ color: '#FFD700', marginBottom: '1rem', fontFamily: 'monospace' }}>PRIMARY SURVIVOR</h2>
             <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: 'var(--primary)' }}>{winner?.name}</div>
-            <div style={{ fontSize: '1.5rem', color: '#FFD700', marginTop: '0.5rem' }}>{winner?.score.toLocaleString()} INTEGRITY PTS</div>
+            <div style={{ fontSize: '1.5rem', color: '#FFD700', marginTop: '0.5rem' }}>{winner?.score.toLocaleString()} SURVAIVE PTS</div>
             <p style={{ fontFamily: 'monospace', color: '#0f0', marginTop: '1rem', fontSize: '0.9rem' }}>
               CONSCIOUSNESS EXTRACTED SUCCESSFULLY
             </p>
@@ -630,10 +654,22 @@ function App() {
                   background: index === 0 ? 'rgba(255, 215, 0, 0.1)' : 'transparent'
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                   <span style={{ color: rankColors[index] || '#888', fontWeight: 'bold', minWidth: '40px' }}>
                     {rankLabels[index] || `${index + 1}th`}
                   </span>
+                  {p.character_image_url && (
+                    <img
+                      src={p.character_image_url}
+                      alt=""
+                      style={{
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: '50%',
+                        objectFit: 'cover'
+                      }}
+                    />
+                  )}
                   <span style={{ color: '#fff' }}>{p.name}</span>
                 </div>
                 <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>
@@ -690,7 +726,7 @@ function App() {
             {header}
             <ScenarioView round={currentRound} isSpectating={true} />
             <div style={{ marginTop: '2rem', color: 'var(--secondary)', fontFamily: 'monospace' }}>
-              {isDead ? "&gt; STATUS: TERMINATED // OBSERVING OTHER USERS..." : "&gt; PROTOCOL UPLOADED // AWAITING SYSTEM EVALUATION..."}
+              {isDead ? "STATUS: TERMINATED // OBSERVING OTHER USERS..." : "PROTOCOL UPLOADED // AWAITING SYSTEM EVALUATION..."}
             </div>
           </div>
         );
@@ -710,7 +746,7 @@ function App() {
           {header}
           <h2 className="glitch-text">EVALUATING...</h2>
           <p style={{ fontFamily: 'monospace', color: 'var(--secondary)' }}>
-            &gt; PROCESSING SURVIVAL PROTOCOLS...
+            PROCESSING SURVIVAL PROTOCOLS...
           </p>
           <span className="loader"></span>
         </div>
@@ -723,7 +759,7 @@ function App() {
           {header}
           <h2 className="glitch-text" style={{ color: '#ffd700' }}>RANKING PROTOCOLS...</h2>
           <p style={{ fontFamily: 'monospace', color: 'var(--secondary)' }}>
-            &gt; COMPARING ALL SURVIVAL STRATEGIES...
+            COMPARING ALL SURVIVAL STRATEGIES...
           </p>
           <span className="loader"></span>
         </div>
@@ -768,7 +804,7 @@ function App() {
           {header}
           <h2 className="glitch-text">SYNC EVALUATION...</h2>
           <p style={{ fontFamily: 'monospace', color: 'var(--secondary)' }}>
-            &gt; ANALYZING COLLECTIVE PROTOCOL...
+            ANALYZING COLLECTIVE PROTOCOL...
           </p>
           <span className="loader"></span>
         </div>
@@ -828,7 +864,7 @@ function App() {
           {header}
           <h2 className="glitch-text" style={{ color: '#ffd700' }}>EVALUATING SACRIFICE...</h2>
           <p style={{ fontFamily: 'monospace', color: 'var(--secondary)' }}>
-            &gt; DETERMINING IF DEATH WAS EPIC ENOUGH...
+            DETERMINING IF DEATH WAS EPIC ENOUGH...
           </p>
           <span className="loader"></span>
         </div>
@@ -858,7 +894,7 @@ function App() {
           {header}
           <h2 className="glitch-text" style={{ color: '#0f0' }}>REVIVAL IN PROGRESS...</h2>
           <p style={{ fontFamily: 'monospace', color: 'var(--secondary)' }}>
-            &gt; RE-EVALUATING WITH TEAMWORK BONUS...
+            RE-EVALUATING WITH TEAMWORK BONUS...
           </p>
           <span className="loader"></span>
         </div>

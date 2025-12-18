@@ -48,7 +48,6 @@ IMAGE_STYLE_THEMES = [
     "tim burton style, gothic whimsy, spirals, pale characters, dark humor",
     "mad max fury road, desert apocalypse, rust and chrome, war rigs",
     "stained glass window, luminous colors, black leading, religious imagery",
-    "rick and morty style, wobbly lines, interdimensional chaos, bright colors",
     "medieval manuscript illumination, gold leaf, ornate borders, flat perspective",
     "noir detective style, black and white, dramatic shadows, venetian blinds",
 ]
@@ -285,7 +284,6 @@ RANDOM_ART_STYLES = [
     "synthwave retrowave neon glow",
     "tim burton gothic whimsy",
     "low-poly PS1 aesthetic",
-    "rick and morty wobbly cartoon",
     "tarot card mystical art nouveau",
     "noir detective dramatic shadows",
 ]
@@ -364,7 +362,7 @@ image = modal.Image.debian_slim().pip_install(
 ).add_local_file("config.yaml", remote_path="/config.yaml"
 ).add_local_file("backend/prompts.py", remote_path="/root/prompts.py")
 
-app = modal.App("mas-ai", image=image)
+app = modal.App("survaive", image=image)
 
 
 # =============================================================================
@@ -411,6 +409,12 @@ def get_video_model_url() -> str:
     base_url = CONFIG["image_generation"]["fal_queue_url"]
     model = CONFIG["video_generation"]["model"]
     return f"{base_url}/{model}"
+
+
+def get_round_config() -> list[str]:
+    """Get the round configuration list."""
+    return CONFIG.get("rounds", {}).get("config", ["survival", "survival", "cooperative", "sacrifice", "last_stand"])
+
 
 # --- Clients ---
 def get_llm_client():
@@ -817,6 +821,106 @@ async def generate_video_prompt_llm_async(player_name: str, rank: int, total_pla
         }
 
 
+async def generate_video_prompt_winner_async(player_name: str, video_theme: str):
+    """Generate winner video script using LLM - triumphant tone."""
+    import httpx
+    import json
+    import re
+
+    # Get duration and calculate word limit
+    duration = CONFIG["video_generation"]["duration_seconds"]
+    word_limit = prompts.get_word_limit_for_duration(duration)
+
+    prompt = prompts.format_prompt(
+        prompts.VIDEO_SCRIPT_WINNER,
+        video_theme=video_theme,
+        player_name=player_name,
+        duration=duration,
+        word_limit=word_limit
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{CONFIG['llm']['base_url']}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {os.environ['MOONSHOT_API_KEY']}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": get_model("video_script_generation"),
+                    "messages": [{"role": "user", "content": prompt}]
+                }
+            )
+            response.raise_for_status()
+            data = response.json()
+            content = data["choices"][0]["message"]["content"]
+
+            json_match = re.search(r'\{[\s\S]*\}', content)
+            if json_match:
+                result = json.loads(json_match.group(0))
+                print(f"VIDEO WINNER PROMPT: Generated for {player_name} (audio_type: {result.get('audio_type', 'dialogue')})", flush=True)
+                return result
+
+    except Exception as e:
+        print(f"VIDEO WINNER PROMPT Error for {player_name}: {e}", flush=True)
+
+    # Fallback - use new format with all fields
+    fallback = prompts.FALLBACK_WINNER_VIDEO_SCRIPT.copy()
+    fallback["audio"] = fallback["audio"].format(player_name=player_name)
+    return fallback
+
+
+async def generate_video_prompt_loser_async(player_name: str, video_theme: str):
+    """Generate loser video script using LLM - consoling but humorous tone."""
+    import httpx
+    import json
+    import re
+
+    # Get duration and calculate word limit
+    duration = CONFIG["video_generation"]["duration_seconds"]
+    word_limit = prompts.get_word_limit_for_duration(duration)
+
+    prompt = prompts.format_prompt(
+        prompts.VIDEO_SCRIPT_LOSER,
+        video_theme=video_theme,
+        player_name=player_name,
+        duration=duration,
+        word_limit=word_limit
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{CONFIG['llm']['base_url']}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {os.environ['MOONSHOT_API_KEY']}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": get_model("video_script_generation"),
+                    "messages": [{"role": "user", "content": prompt}]
+                }
+            )
+            response.raise_for_status()
+            data = response.json()
+            content = data["choices"][0]["message"]["content"]
+
+            json_match = re.search(r'\{[\s\S]*\}', content)
+            if json_match:
+                result = json.loads(json_match.group(0))
+                print(f"VIDEO LOSER PROMPT: Generated for {player_name} (audio_type: {result.get('audio_type', 'dialogue')})", flush=True)
+                return result
+
+    except Exception as e:
+        print(f"VIDEO LOSER PROMPT Error for {player_name}: {e}", flush=True)
+
+    # Fallback - use new format with all fields
+    fallback = prompts.FALLBACK_LOSER_VIDEO_SCRIPT.copy()
+    fallback["audio"] = fallback["audio"].format(player_name=player_name)
+    return fallback
+
+
 def generate_image_fal(prompt: str, use_case: str = "result_image"):
     import requests
     url = get_image_url(use_case)
@@ -839,7 +943,7 @@ def generate_image_fal(prompt: str, use_case: str = "result_image"):
         return None
 
 
-async def submit_video_request_async(player_name: str, image_url: str, scene: str, dialogue: str, video_theme: str, client: "httpx.AsyncClient"):
+async def submit_video_request_async(player_name: str, image_url: str, script_data: dict, video_theme: str, client: "httpx.AsyncClient"):
     """Submit a video generation request and return the request_id (don't wait for completion)."""
     submit_url = get_video_model_url()
     headers = {
@@ -847,8 +951,8 @@ async def submit_video_request_async(player_name: str, image_url: str, scene: st
         "Content-Type": "application/json"
     }
 
-    # Create prompt with LLM-generated scene and dialogue, plus hardcoded theme
-    prompt = f'{scene} An announcer says "{dialogue}" Setting: {video_theme}'
+    # Build Kling v2.6 Pro formatted prompt with proper audio specification
+    prompt = prompts.build_video_prompt(script_data, video_theme)
     duration = str(CONFIG["video_generation"]["duration_seconds"])
 
     payload = {
@@ -993,6 +1097,7 @@ class Round(BaseModel):
 
     # Timer for submission phases (30 second limit)
     submission_start_time: Optional[float] = None  # When submission phase started
+    vote_start_time: Optional[float] = None        # When voting phase started
     timed_out_players: Dict[str, bool] = {}        # player_id -> True if timed out
 
 class GameState(BaseModel):
@@ -1002,23 +1107,22 @@ class GameState(BaseModel):
     players: Dict[str, Player] = {}
     rounds: List[Round] = []
     current_round_idx: int = -1
-    max_rounds: int = 5
+    max_rounds: int = Field(default_factory=lambda: len(get_round_config()))
     created_at: float = Field(default_factory=time.time)
-    # Round configuration - determines type of each round (flexible positioning)
-    round_config: List[str] = Field(default_factory=lambda: [
-        "survival", "survival", "cooperative", "sacrifice", "last_stand"
-    ])
+    # Round configuration - determines type of each round (configurable via config.yaml)
+    round_config: list[str] = Field(default_factory=get_round_config)
     # Pre-warmed scenarios generated in parallel when game is created
     prewarmed_scenarios: List[Optional[str]] = []  # Index corresponds to round number - 1, None for blind_architect
-    # End game video fields - videos for ALL players
-    player_videos: Dict[str, str] = {}  # player_id -> video URL
-    videos_status: Literal["pending", "generating", "ready", "failed"] = "pending"
+    # End game video fields - pre-generated winner/loser videos for ALL players
+    player_winner_videos: Dict[str, str] = {}  # player_id -> winner video URL
+    player_loser_videos: Dict[str, str] = {}   # player_id -> loser video URL
+    videos_status: Literal["pending", "generating", "ready", "partial", "failed"] = "pending"
     video_theme: Optional[str] = None  # Consistent theme for all videos
     winner_id: Optional[str] = None
 
 # --- Persistent Storage ---
 # We use a Dict to store game states. Key=GameCode
-games = modal.Dict.from_name("mas-ai-games", create_if_missing=True)
+games = modal.Dict.from_name("survaive-games", create_if_missing=True)
 
 # --- Secrets ---
 # Use Modal's secret storage - create with: modal secret create ai-game-secrets MOONSHOT_API_KEY=xxx FAL_KEY=xxx
@@ -1250,8 +1354,8 @@ async def api_get_game_state(request: Request):
                             if current_round.type == "cooperative":
                                 p.strategy = "[TIMEOUT - No strategy submitted]"
 
-                            # Generate timeout image showing them doing nothing
-                            generate_timeout_image.spawn(game.code, pid, current_round.style_theme)
+                            # NOTE: Timeout images are now generated inside the judgement functions
+                            # to avoid race conditions with async game state saves
 
                     # Clear the timer to prevent re-triggering
                     current_round.submission_start_time = None
@@ -1265,32 +1369,47 @@ async def api_get_game_state(request: Request):
                     if all_handled:
                         # Check if everyone is dead (all timed out)
                         all_dead = all(not p.is_alive for p in lobby_players)
+                        needs_save = True
 
-                        if all_dead:
-                            # Everyone timed out - skip to results, no judgement needed
-                            current_round.status = "results"
-                            needs_save = True
-                            print(f"TIMEOUT: All players dead, skipping to results", flush=True)
-
-                            # For cooperative mode, set team failure
-                            if current_round.type == "cooperative":
+                        # Handle round type specific transitions
+                        if current_round.type == "cooperative":
+                            if all_dead:
+                                # Everyone timed out - skip directly to results with team failure
                                 current_round.coop_team_survived = False
                                 current_round.coop_team_reason = "The entire team stood around doing nothing. Total failure."
-                        else:
-                            # Some players submitted - advance to judgement
-                            current_round.status = "judgement"
-                            needs_save = True
-                            print(f"TIMEOUT: All players handled, advancing to judgement", flush=True)
-
-                            # Spawn appropriate judgement based on round type
-                            if current_round.type == "ranked":
-                                run_ranked_judgement.spawn(game.code)
-                            elif current_round.type == "cooperative":
-                                # For coop, generate strategy images first
-                                generate_coop_strategy_images.spawn(game.code)
+                                current_round.status = "results"
+                                print(f"TIMEOUT: All players dead in coop, skipping to results", flush=True)
+                                # Still generate timeout images for display on results
+                                generate_coop_strategy_images.spawn(game.code, game.current_round_idx)
                             else:
-                                # Standard survival/blind_architect/last_stand
-                                run_round_judgement.spawn(game.code)
+                                # Some players submitted - check if voting is needed
+                                alive_players = [p for p in lobby_players if p.is_alive]
+                                if len(alive_players) <= 1:
+                                    # Only 1 alive player - skip voting (can't vote for self)
+                                    if alive_players:
+                                        winner = alive_players[0]
+                                        current_round.coop_winning_strategy_id = winner.id
+                                        current_round.coop_vote_points[winner.id] = 200
+                                        winner.score += 200
+                                    current_round.status = "coop_judgement"
+                                    print(f"TIMEOUT: Only {len(alive_players)} alive in coop, skipping voting", flush=True)
+                                    generate_coop_strategy_images.spawn(game.code, game.current_round_idx)
+                                    run_coop_judgement.spawn(game.code, game.current_round_idx)
+                                else:
+                                    # Multiple players - go to voting phase
+                                    current_round.status = "coop_voting"
+                                    current_round.vote_start_time = time.time()
+                                    print(f"TIMEOUT: Advancing coop to voting", flush=True)
+                                    generate_coop_strategy_images.spawn(game.code, game.current_round_idx)
+                        elif current_round.type == "ranked":
+                            current_round.status = "ranked_judgement"
+                            print(f"TIMEOUT: All players handled, advancing to ranked_judgement (all_dead={all_dead})", flush=True)
+                            run_ranked_judgement.spawn(game.code, game.current_round_idx)
+                        else:
+                            # Standard survival/blind_architect/last_stand
+                            current_round.status = "judgement"
+                            print(f"TIMEOUT: All players handled, advancing to judgement (all_dead={all_dead})", flush=True)
+                            run_round_judgement.spawn(game.code, game.current_round_idx)
 
                 elif current_round.status == "trap_creation":
                     # Mark players who haven't submitted trap as timed out
@@ -1302,8 +1421,8 @@ async def api_get_game_state(request: Request):
                             needs_save = True
                             print(f"TIMEOUT: Player {p.name} timed out in trap_creation phase", flush=True)
 
-                            # Generate timeout image
-                            generate_timeout_image.spawn(game.code, pid, current_round.style_theme)
+                            # NOTE: Timeout images are now generated inside the judgement functions
+                            # to avoid race conditions with async game state saves
 
                     # Clear the timer
                     current_round.submission_start_time = None
@@ -1312,13 +1431,15 @@ async def api_get_game_state(request: Request):
                     lobby_players = [p for p in game.players.values() if p.in_lobby]
                     all_dead = all(not p.is_alive for p in lobby_players)
                     if all_dead:
-                        # Everyone timed out - skip to results
-                        current_round.status = "results"
+                        # Everyone timed out - go to judgement to generate timeout images
+                        current_round.status = "judgement"
                         needs_save = True
-                        print(f"TIMEOUT: All players dead in trap_creation, skipping to results", flush=True)
+                        print(f"TIMEOUT: All players dead in trap_creation, advancing to judgement for timeout images", flush=True)
+                        run_round_judgement.spawn(game.code, game.current_round_idx)
                     elif current_round.trap_proposals:
                         # Some traps submitted - advance to voting
                         current_round.status = "trap_voting"
+                        current_round.vote_start_time = time.time()
                         needs_save = True
                         print(f"TIMEOUT: Advancing to trap_voting with {len(current_round.trap_proposals)} proposals", flush=True)
 
@@ -1339,6 +1460,7 @@ async def api_get_game_state(request: Request):
                         else:
                             # Multiple volunteers - advance to voting
                             current_round.status = "sacrifice_voting"
+                            current_round.vote_start_time = time.time()
                             print(f"TIMEOUT: {len(volunteer_ids)} volunteers, advancing to sacrifice_voting", flush=True)
                     else:
                         # No volunteers - randomly pick a martyr (cowards get drafted)
@@ -1384,6 +1506,90 @@ async def api_get_game_state(request: Request):
                             current_round.style_theme
                         )
 
+        # =====================================================================
+        # VOTING PHASE TIMEOUT HANDLING
+        # =====================================================================
+        vote_timeout = CONFIG["game"]["vote_timeout_seconds"]
+
+        if current_round.status == "trap_voting":
+            if current_round.vote_start_time and (time.time() - current_round.vote_start_time) >= vote_timeout:
+                current_round.vote_start_time = None
+                needs_save = True
+                print(f"TIMEOUT: trap_voting timed out", flush=True)
+
+                if current_round.votes:
+                    # Tally existing votes, pick winner
+                    vote_counts = {}
+                    for target in current_round.votes.values():
+                        vote_counts[target] = vote_counts.get(target, 0) + 1
+                    winner_id = max(vote_counts, key=vote_counts.get)
+                else:
+                    # No votes at all - pick random trap proposal
+                    if current_round.trap_proposals:
+                        winner_id = random.choice(list(current_round.trap_proposals.keys()))
+                    else:
+                        # No proposals (shouldn't happen) - skip to results
+                        current_round.status = "results"
+                        print(f"TIMEOUT: trap_voting no proposals, skipping to results", flush=True)
+                        winner_id = None
+
+                if winner_id and winner_id in current_round.trap_proposals:
+                    winning_trap = current_round.trap_proposals[winner_id]
+                    winning_image = current_round.trap_images.get(winner_id)
+
+                    current_round.scenario_text = winning_trap
+                    current_round.scenario_image_url = winning_image
+                    current_round.architect_id = winner_id
+                    current_round.status = "strategy"
+                    current_round.submission_start_time = time.time()
+                    if winner_id in game.players:
+                        game.players[winner_id].score += 500
+                    print(f"TIMEOUT: trap_voting resolved, winner: {winner_id}", flush=True)
+
+        elif current_round.status == "coop_voting":
+            if current_round.vote_start_time and (time.time() - current_round.vote_start_time) >= vote_timeout:
+                current_round.vote_start_time = None
+                needs_save = True
+                print(f"TIMEOUT: coop_voting timed out", flush=True)
+
+                # Tally whatever votes exist and transition
+                tally_coop_votes_and_transition(game, current_round)
+                run_coop_judgement.spawn(game.code, game.current_round_idx)
+
+        elif current_round.status == "sacrifice_voting":
+            if current_round.vote_start_time and (time.time() - current_round.vote_start_time) >= vote_timeout:
+                current_round.vote_start_time = None
+                needs_save = True
+                print(f"TIMEOUT: sacrifice_voting timed out", flush=True)
+
+                # Tally existing votes or pick random eligible player
+                if current_round.sacrifice_votes:
+                    vote_counts = {}
+                    for target in current_round.sacrifice_votes.values():
+                        vote_counts[target] = vote_counts.get(target, 0) + 1
+                    martyr_id = max(vote_counts, key=vote_counts.get)
+                else:
+                    # No votes - pick random from volunteers (or all players if no volunteers)
+                    volunteer_ids = [pid for pid, v in current_round.sacrifice_volunteers.items() if v]
+                    if volunteer_ids:
+                        martyr_id = random.choice(volunteer_ids)
+                    else:
+                        alive_players = [p for p in game.players.values() if p.is_alive and p.in_lobby]
+                        martyr_id = random.choice([p.id for p in alive_players]) if alive_players else None
+
+                if martyr_id:
+                    current_round.martyr_id = martyr_id
+                    current_round.status = "sacrifice_submission"
+                    current_round.submission_start_time = time.time()
+                    print(f"TIMEOUT: sacrifice_voting resolved, martyr: {martyr_id}", flush=True)
+
+        elif current_round.status == "last_stand_revival":
+            if current_round.vote_start_time and (time.time() - current_round.vote_start_time) >= vote_timeout:
+                current_round.vote_start_time = None
+                current_round.status = "results"
+                needs_save = True
+                print(f"TIMEOUT: last_stand_revival timed out, no revival", flush=True)
+
     if needs_save:
         save_game(game)
 
@@ -1392,7 +1598,8 @@ async def api_get_game_state(request: Request):
     response["config"] = {
         "submission_timeout_seconds": CONFIG["game"]["submission_timeout_seconds"],
         "volunteer_timeout_seconds": CONFIG["game"]["volunteer_timeout_seconds"],
-        "sacrifice_submission_timeout_seconds": CONFIG["game"]["sacrifice_submission_timeout_seconds"]
+        "sacrifice_submission_timeout_seconds": CONFIG["game"]["sacrifice_submission_timeout_seconds"],
+        "vote_timeout_seconds": CONFIG["game"]["vote_timeout_seconds"]
     }
     return response
 
@@ -1411,11 +1618,11 @@ def get_system_message(round_num: int, max_rounds: int, round_type: str) -> str:
 
     # Standard survival rounds - progression-based messages
     if round_num == 1:
-        return "SYSTEM BOOT // MULTIPLE SURVIVORS POSSIBLE // FIGHT FOR YOURSELF"
+        return "FIGHT TO SURVIVE // MULTIPLE SURVIVORS POSSIBLE"
     elif round_num == 2:
-        return "ONLY ONE WINNER // EVERY PLAYER FOR THEMSELVES"
+        return "FIGHT TO SURVIVE // ONLY ONE WINNER - EVERY PLAYER FOR THEMSELVES"
     elif round_num == max_rounds:
-        return "EXIT PROTOCOL // FINAL LEVEL"
+        return "FINAL LEVEL"
     else:
         corruption_pct = min(90, 50 + (round_num * 10))
         return f"WARNING: CORRUPTION AT {corruption_pct}% // REALITY UNSTABLE"
@@ -1568,6 +1775,9 @@ def generate_sacrifice_timeout_deaths(game_code: str, martyr_id: str, style_them
     Uses LLM to create funny deaths based on character traits, then generates images.
     """
     import asyncio
+    import httpx
+    import re
+    import json
 
     async def do_generation():
         game = get_game(game_code)
@@ -1798,8 +2008,20 @@ def prewarm_all_scenarios(game_code: str):
     asyncio.run(do_prewarm())
 
 
+async def generate_timeout_image_async(player_id: str, style_theme: str | None):
+    """Generate timeout image inline (async version for use within judgement).
+
+    Returns (player_id, url) tuple for easy result processing.
+    """
+    base_prompt = random.choice(prompts.TIMEOUT_IMAGE_OPTIONS) + prompts.TIMEOUT_IMAGE_SUFFIX
+    themed_prompt = apply_style_theme(base_prompt, style_theme)
+    url = await generate_image_fal_async(themed_prompt)
+    print(f"TIMEOUT IMG: Generated for {player_id}: {url is not None}", flush=True)
+    return (player_id, url)
+
+
 @app.function(image=image, secrets=secrets)
-def run_round_judgement(game_code: str):
+def run_round_judgement(game_code: str, expected_round_idx: int = -1):
     """Run judgement for all players in parallel using asyncio."""
     import json
     import asyncio
@@ -1842,6 +2064,11 @@ def run_round_judgement(game_code: str):
             print(f"JUDGEMENT: Game {game_code} not found!", flush=True)
             return
 
+        # Verify we're still on the expected round (prevent stale task from mutating wrong round)
+        if expected_round_idx >= 0 and game.current_round_idx != expected_round_idx:
+            print(f"JUDGEMENT: Round mismatch! Expected {expected_round_idx}, got {game.current_round_idx}. Aborting.", flush=True)
+            return
+
         current_round = game.rounds[game.current_round_idx]
         print(f"JUDGEMENT: Round {current_round.number}, scenario: {current_round.scenario_text[:50]}...", flush=True)
 
@@ -1849,17 +2076,44 @@ def run_round_judgement(game_code: str):
         tasks = []
         player_info = []
         for pid, p in game.players.items():
-            print(f"JUDGEMENT: Player {p.name} (alive={p.is_alive}, strategy={bool(p.strategy)})", flush=True)
+            print(f"JUDGEMENT: Player {p.name} (alive={p.is_alive}, strategy={bool(p.strategy)}, pending={p.judgement_pending}, has_reason={bool(p.death_reason or p.survival_reason)})", flush=True)
+
+            # Skip players already being judged by early judgement (judge_single_player)
+            if p.judgement_pending:
+                print(f"JUDGEMENT: Skipping {p.name} - judgement already pending", flush=True)
+                continue
+
+            # Skip players already judged (have a death or survival reason from early judgement)
+            if p.death_reason or p.survival_reason:
+                print(f"JUDGEMENT: Skipping {p.name} - already judged", flush=True)
+                continue
+
             if p.strategy and p.is_alive:
                 tasks.append(judge_and_generate(pid, p.name, p.strategy, current_round.scenario_text, current_round.style_theme))
                 player_info.append((pid, p.name))
 
-        if tasks:
-            print(f"JUDGEMENT: Running {len(tasks)} judgements in parallel...", flush=True)
-            # Run all judgements in parallel
-            results = await asyncio.gather(*tasks)
+        # Collect timeout image tasks for timed-out players
+        timeout_pids = list(current_round.timed_out_players.keys())
+        timeout_tasks = [
+            generate_timeout_image_async(pid, current_round.style_theme)
+            for pid in timeout_pids if pid in game.players
+        ]
+        if timeout_tasks:
+            print(f"JUDGEMENT: Also generating {len(timeout_tasks)} timeout images", flush=True)
 
-            # Apply results to game state
+        # Run ALL tasks in parallel (judgements + timeout images)
+        num_judgement_tasks = len(tasks)
+        all_tasks = tasks + timeout_tasks
+        results = []
+        timeout_results = []
+
+        if all_tasks:
+            print(f"JUDGEMENT: Running {len(all_tasks)} tasks in parallel...", flush=True)
+            all_results = await asyncio.gather(*all_tasks)
+            results = all_results[:num_judgement_tasks]
+            timeout_results = all_results[num_judgement_tasks:]
+
+            # Apply judgement results to game state
             for result in results:
                 pid = result["pid"]
                 p = game.players[pid]
@@ -1875,10 +2129,55 @@ def run_round_judgement(game_code: str):
                     p.result_image_url = result["image_url"]
                 print(f"JUDGEMENT: {p.name} survived={result['survived']}", flush=True)
 
-        # ALWAYS set status to results so game doesn't hang
+            # Apply timeout images
+            for pid, url in timeout_results:
+                if url and pid in game.players:
+                    game.players[pid].result_image_url = url
+                    print(f"JUDGEMENT: Saved timeout image for {game.players[pid].name}", flush=True)
+
+        # Re-fetch game state to merge with any concurrent early judgement results
+        # This prevents overwriting scores/reasons set by judge_single_player
+        fresh_game = get_game(game_code)
+        if fresh_game:
+            fresh_round = fresh_game.rounds[fresh_game.current_round_idx]
+
+            # Apply our results to fresh state
+            for result in results:
+                pid = result["pid"]
+                if pid in fresh_game.players:
+                    p = fresh_game.players[pid]
+                    p.is_alive = result["survived"]
+                    if not result["survived"]:
+                        p.death_reason = result["reason"]
+                        p.survival_reason = None
+                    else:
+                        p.score += 100
+                        p.survival_reason = result["reason"]
+                        p.death_reason = None
+                    if result["image_url"]:
+                        p.result_image_url = result["image_url"]
+
+            # Apply timeout images to fresh state
+            for pid, url in timeout_results:
+                if url and pid in fresh_game.players:
+                    fresh_game.players[pid].result_image_url = url
+
+            fresh_round.status = "results"
+            save_game(fresh_game)
+            game = fresh_game  # Update reference for video pre-generation check
+        else:
+            # Fallback if re-fetch fails
+            print(f"JUDGEMENT: Warning - could not re-fetch game, saving original state", flush=True)
+            current_round.status = "results"
+            save_game(game)
+
         print(f"JUDGEMENT: Setting status to results", flush=True)
-        current_round.status = "results"
-        save_game(game)
+
+        # Trigger video pre-generation on round 1 results (only once)
+        if game.current_round_idx == 0 and game.videos_status == "pending":
+            print(f"JUDGEMENT: Round 1 complete, spawning video pre-generation", flush=True)
+            prewarm_player_videos.spawn(game.code)
+
         print(f"JUDGEMENT: Complete!", flush=True)
 
     # Run the async function
@@ -1886,7 +2185,7 @@ def run_round_judgement(game_code: str):
 
 
 @app.function(image=image, secrets=secrets)
-def run_ranked_judgement(game_code: str):
+def run_ranked_judgement(game_code: str, expected_round_idx: int = -1):
     """Run ranked judgement - compare all strategies and assign rankings."""
     import json
     import asyncio
@@ -1897,6 +2196,11 @@ def run_ranked_judgement(game_code: str):
         game = get_game(game_code)
         if not game:
             print(f"RANKED_JUDGE: Game {game_code} not found!", flush=True)
+            return
+
+        # Verify we're still on the expected round
+        if expected_round_idx >= 0 and game.current_round_idx != expected_round_idx:
+            print(f"RANKED_JUDGE: Round mismatch! Expected {expected_round_idx}, got {game.current_round_idx}. Aborting.", flush=True)
             return
 
         current_round = game.rounds[game.current_round_idx]
@@ -1963,12 +2267,32 @@ def run_ranked_judgement(game_code: str):
                 generate_player_image(pid, prompt)
                 for pid, prompt in visual_prompts.items()
             ]
-            image_results = await asyncio.gather(*image_tasks)
+
+            # Also generate timeout images for timed-out players
+            timeout_pids = list(current_round.timed_out_players.keys())
+            timeout_tasks = [
+                generate_timeout_image_async(pid, current_round.style_theme)
+                for pid in timeout_pids if pid in game.players
+            ]
+            if timeout_tasks:
+                print(f"RANKED_JUDGE: Also generating {len(timeout_tasks)} timeout images", flush=True)
+
+            # Run all image tasks in parallel
+            all_image_tasks = image_tasks + timeout_tasks
+            all_image_results = await asyncio.gather(*all_image_tasks)
+            image_results = all_image_results[:len(image_tasks)]
+            timeout_results = all_image_results[len(image_tasks):]
 
             # Apply images to players
             for pid, url in image_results:
                 if url:
                     game.players[pid].result_image_url = url
+
+            # Apply timeout images
+            for pid, url in timeout_results:
+                if url and pid in game.players:
+                    game.players[pid].result_image_url = url
+                    print(f"RANKED_JUDGE: Saved timeout image for {game.players[pid].name}", flush=True)
 
         except Exception as e:
             print(f"RANKED_JUDGE: Error - {e}", flush=True)
@@ -1983,6 +2307,12 @@ def run_ranked_judgement(game_code: str):
         # Transition to results
         current_round.status = "results"
         save_game(game)
+
+        # Trigger video pre-generation on round 1 results (only once)
+        if game.current_round_idx == 0 and game.videos_status == "pending":
+            print("RANKED_JUDGE: Round 1 complete, spawning video pre-generation", flush=True)
+            prewarm_player_videos.spawn(game.code)
+
         print("RANKED_JUDGE: Complete!", flush=True)
 
     asyncio.run(do_ranked_judgement())
@@ -2065,19 +2395,16 @@ def judge_single_player(game_code: str, player_id: str):
                 player.judgement_pending = False
 
         # Check if all players are done - if so, transition to results
-        # Using 5 minutes instead of 60s to give players time to think about strategies
-        cutoff = time.time() - 300
-
-        # Get all active in-lobby players (regardless of alive status - that changes during judgement)
-        active_in_lobby = [p for p in game.players.values()
-                          if p.last_active > cutoff and p.in_lobby]
+        # NOTE: Don't filter by last_active - the round timeout handles inactive players.
+        # Filtering by heartbeat causes premature advancement when players background their tab.
+        in_lobby_players = [p for p in game.players.values() if p.in_lobby]
 
         # Check if any judgements are still pending (across ALL players, not just filtered)
         any_pending = any(p.judgement_pending for p in game.players.values())
-        # Check if all active in-lobby players have submitted strategies
-        all_submitted = all(p.strategy for p in active_in_lobby) if active_in_lobby else True
+        # Check if all in-lobby players have submitted strategies
+        all_submitted = all(p.strategy for p in in_lobby_players) if in_lobby_players else True
 
-        print(f"EARLY_JUDGE: Check - pending={any_pending}, submitted={all_submitted}, players={len(active_in_lobby)}, status={current_round.status}", flush=True)
+        print(f"EARLY_JUDGE: Check - pending={any_pending}, submitted={all_submitted}, players={len(in_lobby_players)}, status={current_round.status}", flush=True)
 
         # Transition to results when all judgements complete
         # Status could be "strategy" (still waiting for others) or "judgement" (all submitted, waiting for judges)
@@ -2199,13 +2526,11 @@ def generate_all_player_videos(game_code: str):
             for player in sorted_players:
                 if player.id not in player_images:
                     continue
-                prompt_data = player_prompts[player.id]
-                scene = prompt_data.get("scene", "A ceremony scene")
-                dialogue = prompt_data.get("dialogue", f"Well done, {player.name}!")
+                script_data = player_prompts[player.id]
                 image_url = player_images[player.id]
 
                 submit_tasks.append(submit_video_request_async(
-                    player.name, image_url, scene, dialogue, video_theme, client
+                    player.name, image_url, script_data, video_theme, client
                 ))
                 players_to_submit.append(player)
 
@@ -2280,10 +2605,234 @@ def generate_all_player_videos(game_code: str):
 generate_winner_video = generate_all_player_videos
 
 
+@app.function(image=image, secrets=secrets, timeout=900)  # 15 min timeout for multiple videos
+def prewarm_player_videos(game_code: str):
+    """Pre-generate winner AND loser videos for ALL players using their avatars.
+
+    Called when round 1 results are shown.
+    Generates 2 videos per player (winner + loser) so the correct one can be
+    selected instantly at game end.
+    """
+    import asyncio
+    import httpx
+
+    async def do_prewarm_videos():
+        game = get_game(game_code)
+        if not game:
+            print(f"PREWARM VIDEO: Game {game_code} not found!", flush=True)
+            return
+
+        players = list(game.players.values())
+        if not players:
+            print("PREWARM VIDEO: No players found!", flush=True)
+            return
+
+        total_players = len(players)
+
+        # Select random video theme for all videos
+        video_theme = random.choice(VIDEO_STYLE_THEMES)
+
+        game.videos_status = "generating"
+        game.video_theme = video_theme
+        save_game(game)
+
+        print(f"PREWARM VIDEO: Starting for {total_players} players, theme: {video_theme}", flush=True)
+
+        # ============================================================
+        # PHASE 1: Generate ALL LLM prompts in parallel (2 per player)
+        # ============================================================
+        print(f"PREWARM VIDEO PHASE 1: Generating {total_players * 2} LLM prompts...", flush=True)
+
+        llm_tasks = []
+        task_metadata = []  # Track (video_type, player_id) for each task
+
+        for player in players:
+            # Winner prompt
+            llm_tasks.append(generate_video_prompt_winner_async(player.name, video_theme))
+            task_metadata.append(("winner", player.id))
+            # Loser prompt
+            llm_tasks.append(generate_video_prompt_loser_async(player.name, video_theme))
+            task_metadata.append(("loser", player.id))
+
+        llm_results_raw = await asyncio.gather(*llm_tasks, return_exceptions=True)
+
+        # Organize results: {player_id: {"winner": {...}, "loser": {...}}}
+        player_prompts = {p.id: {} for p in players}
+        for idx, (video_type, player_id) in enumerate(task_metadata):
+            result = llm_results_raw[idx]
+            if isinstance(result, Exception):
+                print(f"PREWARM VIDEO PHASE 1: LLM error for {player_id} ({video_type}): {result}", flush=True)
+                # Use fallback
+                if video_type == "winner":
+                    player_prompts[player_id]["winner"] = {
+                        "scene": "A champion emerges victorious from a portal of light",
+                        "dialogue": "Congratulations to the champion!"
+                    }
+                else:
+                    player_prompts[player_id]["loser"] = {
+                        "scene": "A figure receives a consolation prize amid confetti",
+                        "dialogue": "Better luck next time!"
+                    }
+            else:
+                player_prompts[player_id][video_type] = result
+
+        print(f"PREWARM VIDEO PHASE 1: Complete", flush=True)
+
+        # ============================================================
+        # PHASE 2: Determine base images for each player
+        # Use avatar if available, otherwise generate ceremony image
+        # ============================================================
+        print(f"PREWARM VIDEO PHASE 2: Preparing base images...", flush=True)
+
+        player_base_images = {}  # player_id -> image_url
+        image_gen_tasks = []  # For players without avatars
+        image_gen_player_ids = []
+
+        for player in players:
+            if player.character_image_url:
+                # Use existing avatar
+                player_base_images[player.id] = player.character_image_url
+                print(f"PREWARM VIDEO PHASE 2: Using avatar for {player.name}", flush=True)
+            else:
+                # Need to generate a base image using winner scene (more generic)
+                scene = player_prompts[player.id]["winner"].get("scene", "A ceremony scene")
+                image_prompt = f"{scene}. Setting: {video_theme}. Cinematic, dramatic lighting, vivid colors."
+                image_gen_tasks.append(generate_image_fal_async(image_prompt))
+                image_gen_player_ids.append(player.id)
+
+        # Generate missing base images in parallel
+        if image_gen_tasks:
+            print(f"PREWARM VIDEO PHASE 2: Generating {len(image_gen_tasks)} base images...", flush=True)
+            image_results = await asyncio.gather(*image_gen_tasks, return_exceptions=True)
+
+            for idx, player_id in enumerate(image_gen_player_ids):
+                result = image_results[idx]
+                if isinstance(result, Exception) or result is None:
+                    print(f"PREWARM VIDEO PHASE 2: Image failed for {player_id}", flush=True)
+                else:
+                    player_base_images[player_id] = result
+
+        print(f"PREWARM VIDEO PHASE 2: {len(player_base_images)}/{total_players} base images ready", flush=True)
+
+        if not player_base_images:
+            print("PREWARM VIDEO: All base images failed, aborting", flush=True)
+            game = get_game(game_code)
+            if game:
+                game.videos_status = "failed"
+                save_game(game)
+            return
+
+        # ============================================================
+        # PHASE 3: Submit ALL video requests in parallel
+        # 2 videos per player with a base image
+        # ============================================================
+        print(f"PREWARM VIDEO PHASE 3: Submitting video requests...", flush=True)
+
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            submit_tasks = []
+            submit_metadata = []  # (player_id, video_type)
+
+            for player in players:
+                if player.id not in player_base_images:
+                    continue
+
+                base_image = player_base_images[player.id]
+
+                for video_type in ["winner", "loser"]:
+                    script_data = player_prompts[player.id][video_type]
+
+                    task = submit_video_request_async(
+                        player.name, base_image, script_data, video_theme, client
+                    )
+                    submit_tasks.append(task)
+                    submit_metadata.append((player.id, video_type))
+
+            submit_results = await asyncio.gather(*submit_tasks, return_exceptions=True)
+
+            # Collect request IDs: {player_id: {"winner": request_id, "loser": request_id}}
+            player_request_ids = {p.id: {} for p in players}
+            for idx, (player_id, video_type) in enumerate(submit_metadata):
+                result = submit_results[idx]
+                if isinstance(result, Exception) or result is None:
+                    print(f"PREWARM VIDEO PHASE 3: Submit failed for {player_id} ({video_type})", flush=True)
+                else:
+                    player_request_ids[player_id][video_type] = result
+
+            total_submitted = sum(len(v) for v in player_request_ids.values())
+            print(f"PREWARM VIDEO PHASE 3: {total_submitted} video requests submitted", flush=True)
+
+            if total_submitted == 0:
+                print("PREWARM VIDEO: All submissions failed, aborting", flush=True)
+                game = get_game(game_code)
+                if game:
+                    game.videos_status = "failed"
+                    save_game(game)
+                return
+
+            # ============================================================
+            # PHASE 4: Poll ALL video statuses in parallel
+            # ============================================================
+            print(f"PREWARM VIDEO PHASE 4: Polling video statuses...", flush=True)
+
+            poll_tasks = []
+            poll_metadata = []  # (player_id, video_type)
+
+            for player_id, request_ids in player_request_ids.items():
+                for video_type, request_id in request_ids.items():
+                    if request_id:
+                        player_name = game.players[player_id].name
+                        task = poll_video_status_async(f"{player_name}_{video_type}", request_id, client)
+                        poll_tasks.append(task)
+                        poll_metadata.append((player_id, video_type))
+
+            poll_results = await asyncio.gather(*poll_tasks, return_exceptions=True)
+
+            # Collect final video URLs
+            winner_videos = {}  # player_id -> video_url
+            loser_videos = {}   # player_id -> video_url
+
+            for idx, (player_id, video_type) in enumerate(poll_metadata):
+                result = poll_results[idx]
+                if isinstance(result, Exception) or result is None:
+                    print(f"PREWARM VIDEO PHASE 4: Video failed for {player_id} ({video_type})", flush=True)
+                else:
+                    if video_type == "winner":
+                        winner_videos[player_id] = result
+                    else:
+                        loser_videos[player_id] = result
+
+            print(f"PREWARM VIDEO PHASE 4: {len(winner_videos)} winner, {len(loser_videos)} loser videos ready", flush=True)
+
+        # ============================================================
+        # Save results to game state
+        # ============================================================
+        game = get_game(game_code)
+        if game:
+            game.player_winner_videos = winner_videos
+            game.player_loser_videos = loser_videos
+
+            total_videos = len(winner_videos) + len(loser_videos)
+            expected_videos = total_players * 2
+
+            if total_videos == expected_videos:
+                game.videos_status = "ready"
+                print(f"PREWARM VIDEO: SUCCESS! All {total_videos} videos ready", flush=True)
+            elif total_videos > 0:
+                game.videos_status = "partial"
+                print(f"PREWARM VIDEO: PARTIAL - {total_videos}/{expected_videos} videos ready", flush=True)
+            else:
+                game.videos_status = "failed"
+                print(f"PREWARM VIDEO: FAILED - no videos generated", flush=True)
+
+            save_game(game)
+
+    asyncio.run(do_prewarm_videos())
+
+
 # --- Cooperative Round Functions ---
 
 @app.function(image=image, secrets=secrets)
-def generate_coop_strategy_images(game_code: str):
+def generate_coop_strategy_images(game_code: str, expected_round_idx: int = -1):
     """Generate strategy visualization images for all players in cooperative round."""
     import asyncio
 
@@ -2291,6 +2840,11 @@ def generate_coop_strategy_images(game_code: str):
         game = get_game(game_code)
         if not game:
             print(f"COOP IMAGES: Game {game_code} not found!", flush=True)
+            return
+
+        # Verify we're still on the expected round
+        if expected_round_idx >= 0 and game.current_round_idx != expected_round_idx:
+            print(f"COOP IMAGES: Round mismatch! Expected {expected_round_idx}, got {game.current_round_idx}. Aborting.", flush=True)
             return
 
         current_round = game.rounds[game.current_round_idx]
@@ -2306,9 +2860,24 @@ def generate_coop_strategy_images(game_code: str):
                 tasks.append(generate_image_fal_async(themed_prompt))
                 player_ids.append(pid)
 
-        if tasks:
-            print(f"COOP IMAGES: Generating {len(tasks)} images in parallel...", flush=True)
-            results = await asyncio.gather(*tasks)
+        # Also generate timeout images for timed-out players
+        timeout_pids = list(current_round.timed_out_players.keys())
+        timeout_tasks = []
+        for pid in timeout_pids:
+            if pid in game.players:
+                timeout_tasks.append(generate_timeout_image_async(pid, current_round.style_theme))
+        if timeout_tasks:
+            print(f"COOP IMAGES: Also generating {len(timeout_tasks)} timeout images", flush=True)
+
+        # Run all image generation in parallel
+        num_strategy_tasks = len(tasks)
+        all_tasks = tasks + timeout_tasks
+
+        if all_tasks:
+            print(f"COOP IMAGES: Generating {len(all_tasks)} images in parallel...", flush=True)
+            all_results = await asyncio.gather(*all_tasks)
+            results = all_results[:num_strategy_tasks]
+            timeout_results = all_results[num_strategy_tasks:]
 
             # Reload game to get fresh state before updating
             game = get_game(game_code)
@@ -2316,10 +2885,17 @@ def generate_coop_strategy_images(game_code: str):
                 return
             current_round = game.rounds[game.current_round_idx]
 
+            # Apply strategy images
             for pid, image_url in zip(player_ids, results):
                 if image_url:
                     current_round.strategy_images[pid] = image_url
                     print(f"COOP IMAGES: Generated image for {pid}", flush=True)
+
+            # Apply timeout images to strategy_images (for voting display)
+            for pid, image_url in timeout_results:
+                if image_url and pid in game.players:
+                    current_round.strategy_images[pid] = image_url
+                    print(f"COOP IMAGES: Generated timeout image for {game.players[pid].name}", flush=True)
 
             save_game(game)
             print(f"COOP IMAGES: Complete! {len(current_round.strategy_images)} images saved", flush=True)
@@ -2386,7 +2962,7 @@ def tally_coop_votes_and_transition(game: GameState, current_round: Round):
 
 
 @app.function(image=image, secrets=secrets)
-def run_coop_judgement(game_code: str):
+def run_coop_judgement(game_code: str, expected_round_idx: int = -1):
     """Run team judgement based on the highest-voted strategy."""
     import json
     import asyncio
@@ -2395,6 +2971,11 @@ def run_coop_judgement(game_code: str):
         game = get_game(game_code)
         if not game:
             print(f"COOP JUDGE: Game {game_code} not found!", flush=True)
+            return
+
+        # Verify we're still on the expected round
+        if expected_round_idx >= 0 and game.current_round_idx != expected_round_idx:
+            print(f"COOP JUDGE: Round mismatch! Expected {expected_round_idx}, got {game.current_round_idx}. Aborting.", flush=True)
             return
 
         current_round = game.rounds[game.current_round_idx]
@@ -2449,6 +3030,12 @@ def run_coop_judgement(game_code: str):
         # Always set status to results
         current_round.status = "results"
         save_game(game)
+
+        # Trigger video pre-generation on round 1 results (only once)
+        if game.current_round_idx == 0 and game.videos_status == "pending":
+            print("COOP JUDGE: Round 1 complete, spawning video pre-generation", flush=True)
+            prewarm_player_videos.spawn(game.code)
+
         print("COOP JUDGE: Complete!", flush=True)
 
     asyncio.run(do_judgement())
@@ -2492,17 +3079,10 @@ async def api_submit_strategy(request: Request):
         # so a re-fetch might not see the strategy we just set. Use the same game object.
         # See CLAUDE.md "Known Issues" section for details.
 
-        # Filter for active players who are in the lobby (active in last 5 minutes)
-        # Using 5 minutes instead of 60s to give players time to think about strategies
-        # without being considered "inactive" and excluded from the completion check
-        cutoff = time.time() - 300
-
-        alive_players = []
-        for _, p in game.players.items():
-            is_active = p.last_active > cutoff
-            # Only count players who have entered the lobby (not still in avatar preview)
-            if p.is_alive and is_active and p.in_lobby:
-                alive_players.append(p)
+        # Get all alive players who are in the lobby
+        # NOTE: Don't filter by last_active - the round timeout handles inactive players
+        # by marking them dead. Filtering by heartbeat causes premature advancement.
+        alive_players = [p for p in game.players.values() if p.is_alive and p.in_lobby]
 
         if not alive_players:
             print("API: Warn - No alive players found. Forcing current.")
@@ -2531,19 +3111,34 @@ async def api_submit_strategy(request: Request):
             current_round = game.rounds[game.current_round_idx]
 
             if current_round.type == "cooperative":
-                # Cooperative round: transition to image voting phase
-                print("API: All strategies received. Advancing to COOP VOTING.")
-                current_round.status = "coop_voting"
-                save_game(game)
-                # Spawn async image generation for all strategies
-                generate_coop_strategy_images.spawn(code)
+                # Cooperative round: check if voting is needed
+                if len(alive_players) <= 1:
+                    # Only 1 alive player - skip voting (can't vote for self)
+                    if alive_players:
+                        winner = alive_players[0]
+                        current_round.coop_winning_strategy_id = winner.id
+                        current_round.coop_vote_points[winner.id] = 200
+                        winner.score += 200
+                    current_round.status = "coop_judgement"
+                    print(f"API: Only {len(alive_players)} alive in coop, skipping voting")
+                    save_game(game)
+                    generate_coop_strategy_images.spawn(code, game.current_round_idx)
+                    run_coop_judgement.spawn(code, game.current_round_idx)
+                else:
+                    # Multiple players - transition to image voting phase
+                    print("API: All strategies received. Advancing to COOP VOTING.")
+                    current_round.status = "coop_voting"
+                    current_round.vote_start_time = time.time()
+                    save_game(game)
+                    # Spawn async image generation for all strategies
+                    generate_coop_strategy_images.spawn(code, game.current_round_idx)
             elif current_round.type == "last_stand":
                 # Last Stand: harsh judgement with potential revival phase
                 print("API: All strategies received. Advancing to LAST STAND Judgement.")
                 current_round.status = "judgement"
                 save_game(game)
                 # Trigger harsh async judgement
-                run_last_stand_judgement.spawn(code)
+                run_last_stand_judgement.spawn(code, game.current_round_idx)
             elif current_round.type == "sacrifice":
                 # Sacrifice: go to volunteer phase
                 print("API: All strategies received. Advancing to SACRIFICE VOLUNTEER.")
@@ -2554,13 +3149,13 @@ async def api_submit_strategy(request: Request):
                 print("API: All strategies received. Advancing to RANKED Judgement.")
                 current_round.status = "ranked_judgement"
                 save_game(game)
-                run_ranked_judgement.spawn(code)
+                run_ranked_judgement.spawn(code, game.current_round_idx)
             else:
                 # Fallback for any other round type
                 print("API: All strategies received. Advancing to Judgement.")
                 current_round.status = "judgement"
                 save_game(game)
-                run_round_judgement.spawn(code)
+                run_round_judgement.spawn(code, game.current_round_idx)
         else:
             print("API: Waiting for others... Saving strategy.")
             save_game(game)  # Save the strategy even if not advancing!
@@ -2594,6 +3189,7 @@ async def api_submit_trap(request: Request):
     alive_players = [p for p in game.players.values() if p.is_alive and p.in_lobby]
     if len(current_round.trap_proposals) >= len(alive_players):
         current_round.status = "trap_voting"
+        current_round.vote_start_time = time.time()
 
     save_game(game)
     return {"status": "trap_submitted"}
@@ -2602,33 +3198,59 @@ async def api_submit_trap(request: Request):
 async def api_vote_trap(request: Request):
     code = request.query_params.get("code")
     data = await request.json()
-    game = get_game(code)
     voter_id = data.get("voter_id")
     target_id = data.get("target_id")
-    
-    if not game: raise HTTPException(status_code=404, detail="Game not found")
-    
-    current_round = game.rounds[game.current_round_idx]
-    current_round.votes[voter_id] = target_id
 
-    alive_players = [p for p in game.players.values() if p.is_alive and p.in_lobby]
-    if len(current_round.votes) >= len(alive_players):
-        vote_counts = {}
-        for target in current_round.votes.values():
-            vote_counts[target] = vote_counts.get(target, 0) + 1
-        winner_id = max(vote_counts, key=vote_counts.get)
-        winning_trap = current_round.trap_proposals[winner_id]
-        winning_image = current_round.trap_images.get(winner_id)
-        
-        current_round.scenario_text = winning_trap
-        current_round.scenario_image_url = winning_image
-        current_round.architect_id = winner_id
-        current_round.status = "strategy"
-        current_round.submission_start_time = time.time()  # Start timer for strategy
-        if winner_id in game.players: game.players[winner_id].score += 500
+    max_retries = 10
+    for attempt in range(max_retries):
+        game = get_game(code)
+        if not game:
+            raise HTTPException(status_code=404, detail="Game not found")
 
-    save_game(game)
-    return {"status": "voted"}
+        current_round = game.rounds[game.current_round_idx]
+
+        # Check if already voted (idempotent - from previous retry)
+        if voter_id in current_round.votes and current_round.votes[voter_id] == target_id:
+            print(f"VOTE_TRAP: Vote already recorded for {voter_id[:8]}...", flush=True)
+            return {"status": "voted"}
+
+        current_round.votes[voter_id] = target_id
+
+        alive_players = [p for p in game.players.values() if p.is_alive and p.in_lobby]
+        if len(current_round.votes) >= len(alive_players):
+            vote_counts = {}
+            for target in current_round.votes.values():
+                vote_counts[target] = vote_counts.get(target, 0) + 1
+            winner_id = max(vote_counts, key=vote_counts.get)
+            winning_trap = current_round.trap_proposals[winner_id]
+            winning_image = current_round.trap_images.get(winner_id)
+
+            current_round.scenario_text = winning_trap
+            current_round.scenario_image_url = winning_image
+            current_round.architect_id = winner_id
+            current_round.status = "strategy"
+            current_round.submission_start_time = time.time()
+            if winner_id in game.players:
+                game.players[winner_id].score += 500
+
+        save_game(game)
+
+        # Wait with jitter before verification
+        jitter = random.uniform(0.05, 0.15)
+        await asyncio.sleep(0.1 + jitter)
+
+        # Verify the vote was saved
+        verification = get_game(code)
+        if verification:
+            v_round = verification.rounds[verification.current_round_idx]
+            if voter_id in v_round.votes and v_round.votes[voter_id] == target_id:
+                return {"status": "voted"}
+
+        print(f"VOTE_TRAP: Race condition for {voter_id[:8]}..., retry {attempt+1}/{max_retries}", flush=True)
+        backoff = (0.15 * (2 ** attempt)) + random.uniform(0, 0.1)
+        await asyncio.sleep(min(backoff, 2.0))
+
+    raise HTTPException(status_code=500, detail="Failed to record vote due to concurrent modifications")
 
 
 @web_app.post("/api/vote_coop")
@@ -2636,39 +3258,59 @@ async def api_vote_coop(request: Request):
     """Handle cooperative round voting - vote for which strategy image looks best."""
     code = request.query_params.get("code")
     data = await request.json()
-    game = get_game(code)
     voter_id = data.get("voter_id")
     target_id = data.get("target_id")
 
-    if not game:
-        raise HTTPException(status_code=404, detail="Game not found")
-
-    # Prevent voting for self
+    # Prevent voting for self (check once before retry loop)
     if voter_id == target_id:
         raise HTTPException(status_code=400, detail="Cannot vote for yourself")
 
-    current_round = game.rounds[game.current_round_idx]
+    max_retries = 10
+    for attempt in range(max_retries):
+        game = get_game(code)
+        if not game:
+            raise HTTPException(status_code=404, detail="Game not found")
 
-    # Validate we're in coop_voting phase
-    if current_round.status != "coop_voting":
-        raise HTTPException(status_code=400, detail=f"Wrong phase: {current_round.status}")
+        current_round = game.rounds[game.current_round_idx]
 
-    current_round.coop_votes[voter_id] = target_id
-    print(f"COOP VOTE: {voter_id} voted for {target_id}", flush=True)
+        # Validate we're in coop_voting phase
+        if current_round.status != "coop_voting":
+            raise HTTPException(status_code=400, detail=f"Wrong phase: {current_round.status}")
 
-    # Check if all alive players in lobby have voted
-    alive_players = [p for p in game.players.values() if p.is_alive and p.in_lobby]
-    if len(current_round.coop_votes) >= len(alive_players):
-        print("COOP VOTE: All votes in, tallying...", flush=True)
-        # Tally votes and transition to coop_judgement
-        tally_coop_votes_and_transition(game, current_round)
-        save_game(game)
-        # Spawn async team judgement
-        run_coop_judgement.spawn(code)
-    else:
-        save_game(game)
+        # Check if already voted (idempotent - from previous retry)
+        if voter_id in current_round.coop_votes and current_round.coop_votes[voter_id] == target_id:
+            print(f"COOP VOTE: Vote already recorded for {voter_id[:8]}...", flush=True)
+            return {"status": "voted"}
 
-    return {"status": "voted"}
+        current_round.coop_votes[voter_id] = target_id
+        print(f"COOP VOTE: {voter_id[:8]}... voted for {target_id[:8]}...", flush=True)
+
+        # Check if all alive players in lobby have voted
+        alive_players = [p for p in game.players.values() if p.is_alive and p.in_lobby]
+        if len(current_round.coop_votes) >= len(alive_players):
+            print("COOP VOTE: All votes in, tallying...", flush=True)
+            tally_coop_votes_and_transition(game, current_round)
+            save_game(game)
+            run_coop_judgement.spawn(code, game.current_round_idx)
+        else:
+            save_game(game)
+
+        # Wait with jitter before verification
+        jitter = random.uniform(0.05, 0.15)
+        await asyncio.sleep(0.1 + jitter)
+
+        # Verify the vote was saved
+        verification = get_game(code)
+        if verification:
+            v_round = verification.rounds[verification.current_round_idx]
+            if voter_id in v_round.coop_votes and v_round.coop_votes[voter_id] == target_id:
+                return {"status": "voted"}
+
+        print(f"COOP VOTE: Race condition for {voter_id[:8]}..., retry {attempt+1}/{max_retries}", flush=True)
+        backoff = (0.15 * (2 ** attempt)) + random.uniform(0, 0.1)
+        await asyncio.sleep(min(backoff, 2.0))
+
+    raise HTTPException(status_code=500, detail="Failed to record vote due to concurrent modifications")
 
 
 @web_app.post("/api/next_round")
@@ -2680,15 +3322,22 @@ async def api_next_round(request: Request):
     next_idx = game.current_round_idx + 1
     if next_idx >= game.max_rounds:
         game.status = "finished"
-        # Find winner and set initial video status
+        # Find winner
         sorted_players = sorted(game.players.values(), key=lambda p: p.score, reverse=True)
         if sorted_players:
             game.winner_id = sorted_players[0].id
+
+        # Videos should already be pre-generated from round 1
+        # Only spawn generation if not already done (fallback)
+        if game.videos_status == "pending":
+            print(f"API: Game finished but videos not pre-generated, spawning now for {code}", flush=True)
             game.videos_status = "generating"
-        save_game(game)
-        # Spawn async video generation for ALL players
-        print(f"API: Game finished, spawning video generation for all players in {code}", flush=True)
-        generate_all_player_videos.spawn(code)
+            save_game(game)
+            prewarm_player_videos.spawn(code)
+        else:
+            print(f"API: Game finished, videos already {game.videos_status} for {code}", flush=True)
+            save_game(game)
+
         return {"status": "finished"}
 
     game.current_round_idx = next_idx
@@ -2757,10 +3406,11 @@ async def api_retry_player_videos(request: Request):
 
     # Reset status and spawn new generation
     game.videos_status = "generating"
-    game.player_videos = {}  # Clear any partial results
+    game.player_winner_videos = {}  # Clear any partial results
+    game.player_loser_videos = {}
     save_game(game)
     print(f"API: Retrying player video generation for {code}", flush=True)
-    generate_all_player_videos.spawn(code)
+    prewarm_player_videos.spawn(code)
     return {"status": "retry_started"}
 
 
@@ -3295,6 +3945,7 @@ async def api_advance_sacrifice_volunteer(request: Request):
 
     # Multiple volunteers (or none) - go to voting phase
     current_round.status = "sacrifice_voting"
+    current_round.vote_start_time = time.time()
     save_game(game)
 
     print(f"SACRIFICE: Advanced to voting with {volunteer_count} volunteers", flush=True)
@@ -3309,69 +3960,87 @@ async def api_vote_sacrifice(request: Request):
     voter_id = data.get("voter_id")
     target_id = data.get("target_id")
 
-    game = get_game(code)
-    if not game:
-        raise HTTPException(status_code=404, detail="Game not found")
-
-    current_round = game.rounds[game.current_round_idx]
-    if current_round.type != "sacrifice" or current_round.status != "sacrifice_voting":
-        raise HTTPException(status_code=400, detail="Not in sacrifice voting phase")
-
-    if voter_id not in game.players:
-        raise HTTPException(status_code=404, detail="Voter not found")
-
-    if target_id not in game.players:
-        raise HTTPException(status_code=404, detail="Target not found")
-
-    # Can't vote for yourself
+    # Can't vote for yourself (check once before retry loop)
     if voter_id == target_id:
         raise HTTPException(status_code=400, detail="Cannot vote for yourself")
 
-    # If there are volunteers, can only vote for volunteers
-    # If no volunteers, can vote for anyone
-    if current_round.sacrifice_volunteers and target_id not in current_round.sacrifice_volunteers:
-        raise HTTPException(status_code=400, detail="Can only vote for volunteers")
+    max_retries = 10
+    for attempt in range(max_retries):
+        game = get_game(code)
+        if not game:
+            raise HTTPException(status_code=404, detail="Game not found")
 
-    current_round.sacrifice_votes[voter_id] = target_id
-    save_game(game)
+        current_round = game.rounds[game.current_round_idx]
+        if current_round.type != "sacrifice" or current_round.status != "sacrifice_voting":
+            raise HTTPException(status_code=400, detail="Not in sacrifice voting phase")
 
-    # Check if all players who CAN vote have voted
-    # A player can't vote if they're the only eligible candidate (can't vote for self)
-    active_players = [p for p in game.players.values() if p.is_alive]
-    volunteer_ids = set(pid for pid, v in current_round.sacrifice_volunteers.items() if v)
+        if voter_id not in game.players:
+            raise HTTPException(status_code=404, detail="Voter not found")
 
-    # Determine who can actually cast a vote
-    voters_who_can_vote = []
-    for p in active_players:
-        if volunteer_ids:
-            # If there are volunteers, player can vote if there's at least one volunteer that isn't themselves
-            can_vote = any(vid != p.id for vid in volunteer_ids)
-        else:
-            # If no volunteers (involuntary draft), player can vote for anyone except themselves
-            can_vote = len(active_players) > 1  # Can vote if there's anyone else
-        if can_vote:
-            voters_who_can_vote.append(p)
+        if target_id not in game.players:
+            raise HTTPException(status_code=404, detail="Target not found")
 
-    all_voted = len(current_round.sacrifice_votes) >= len(voters_who_can_vote)
+        # If there are volunteers, can only vote for volunteers
+        if current_round.sacrifice_volunteers and target_id not in current_round.sacrifice_volunteers:
+            raise HTTPException(status_code=400, detail="Can only vote for volunteers")
 
-    if all_voted:
-        # Tally votes and determine martyr
-        vote_counts = {}
-        for target in current_round.sacrifice_votes.values():
-            vote_counts[target] = vote_counts.get(target, 0) + 1
+        # Check if already voted (idempotent - from previous retry)
+        if voter_id in current_round.sacrifice_votes and current_round.sacrifice_votes[voter_id] == target_id:
+            print(f"SACRIFICE VOTE: Vote already recorded for {voter_id[:8]}...", flush=True)
+            return {"status": "vote_recorded", "votes_cast": len(current_round.sacrifice_votes)}
 
-        # Find the player with most votes (ties broken by first encountered)
-        martyr_id = max(vote_counts, key=vote_counts.get)
-        current_round.martyr_id = martyr_id
-        current_round.status = "sacrifice_submission"
-        current_round.submission_start_time = time.time()  # Start timer for sacrifice speech
+        current_round.sacrifice_votes[voter_id] = target_id
+
+        # Check if all players who CAN vote have voted
+        active_players = [p for p in game.players.values() if p.is_alive]
+        volunteer_ids = set(pid for pid, v in current_round.sacrifice_volunteers.items() if v)
+
+        # Determine who can actually cast a vote
+        voters_who_can_vote = []
+        for p in active_players:
+            if volunteer_ids:
+                can_vote = any(vid != p.id for vid in volunteer_ids)
+            else:
+                can_vote = len(active_players) > 1
+            if can_vote:
+                voters_who_can_vote.append(p)
+
+        all_voted = len(current_round.sacrifice_votes) >= len(voters_who_can_vote)
+        martyr_chosen = False
+        martyr_id = None
+
+        if all_voted:
+            vote_counts = {}
+            for target in current_round.sacrifice_votes.values():
+                vote_counts[target] = vote_counts.get(target, 0) + 1
+
+            martyr_id = max(vote_counts, key=vote_counts.get)
+            current_round.martyr_id = martyr_id
+            current_round.status = "sacrifice_submission"
+            current_round.submission_start_time = time.time()
+            martyr_chosen = True
+            print(f"SACRIFICE: {game.players[martyr_id].name} chosen as martyr", flush=True)
+
         save_game(game)
 
-        martyr_name = game.players[martyr_id].name
-        print(f"SACRIFICE: {martyr_name} chosen as martyr with {vote_counts[martyr_id]} votes", flush=True)
-        return {"status": "martyr_chosen", "martyr_id": martyr_id}
+        # Wait with jitter before verification
+        jitter = random.uniform(0.05, 0.15)
+        await asyncio.sleep(0.1 + jitter)
 
-    return {"status": "vote_recorded", "votes_cast": len(current_round.sacrifice_votes)}
+        # Verify the vote was saved
+        verification = get_game(code)
+        if verification:
+            v_round = verification.rounds[verification.current_round_idx]
+            if voter_id in v_round.sacrifice_votes and v_round.sacrifice_votes[voter_id] == target_id:
+                if martyr_chosen:
+                    return {"status": "martyr_chosen", "martyr_id": martyr_id}
+                return {"status": "vote_recorded", "votes_cast": len(v_round.sacrifice_votes)}
+
+        print(f"SACRIFICE VOTE: Race condition for {voter_id[:8]}..., retry {attempt+1}/{max_retries}", flush=True)
+        backoff = (0.15 * (2 ** attempt)) + random.uniform(0, 0.1)
+        await asyncio.sleep(min(backoff, 2.0))
+
+    raise HTTPException(status_code=500, detail="Failed to record vote due to concurrent modifications")
 
 
 @web_app.post("/api/submit_sacrifice_speech")
@@ -3404,7 +4073,7 @@ async def api_submit_sacrifice_speech(request: Request):
     print(f"SACRIFICE: {martyr_name} submitted death speech, spawning judgement", flush=True)
 
     # Spawn async judgement
-    run_sacrifice_judgement.spawn(code)
+    run_sacrifice_judgement.spawn(code, game.current_round_idx)
 
     return {"status": "speech_submitted"}
 
@@ -3419,61 +4088,85 @@ async def api_vote_revival(request: Request):
     voter_id = data.get("voter_id")
     target_id = data.get("target_id")
 
-    game = get_game(code)
-    if not game:
-        raise HTTPException(status_code=404, detail="Game not found")
+    max_retries = 10
+    for attempt in range(max_retries):
+        game = get_game(code)
+        if not game:
+            raise HTTPException(status_code=404, detail="Game not found")
 
-    current_round = game.rounds[game.current_round_idx]
-    if current_round.type != "last_stand" or current_round.status != "last_stand_revival":
-        raise HTTPException(status_code=400, detail="Not in revival voting phase")
+        current_round = game.rounds[game.current_round_idx]
+        if current_round.type != "last_stand" or current_round.status != "last_stand_revival":
+            raise HTTPException(status_code=400, detail="Not in revival voting phase")
 
-    if voter_id not in game.players:
-        raise HTTPException(status_code=404, detail="Voter not found")
+        if voter_id not in game.players:
+            raise HTTPException(status_code=404, detail="Voter not found")
 
-    voter = game.players[voter_id]
-    if not voter.is_alive:
-        raise HTTPException(status_code=400, detail="Only survivors can vote")
+        voter = game.players[voter_id]
+        if not voter.is_alive:
+            raise HTTPException(status_code=400, detail="Only survivors can vote")
 
-    if target_id not in game.players:
-        raise HTTPException(status_code=404, detail="Target not found")
+        if target_id not in game.players:
+            raise HTTPException(status_code=404, detail="Target not found")
 
-    target = game.players[target_id]
-    if target.is_alive:
-        raise HTTPException(status_code=400, detail="Can only vote for dead players")
+        target = game.players[target_id]
+        if target.is_alive:
+            raise HTTPException(status_code=400, detail="Can only vote for dead players")
 
-    current_round.revival_votes[voter_id] = target_id
+        # Check if already voted (idempotent - from previous retry)
+        if voter_id in current_round.revival_votes and current_round.revival_votes[voter_id] == target_id:
+            print(f"REVIVAL VOTE: Vote already recorded for {voter_id[:8]}...", flush=True)
+            survivors = [p for p in game.players.values() if p.is_alive]
+            return {"status": "vote_recorded", "votes_cast": len(current_round.revival_votes), "survivors": len(survivors)}
 
-    # Check if all survivors have voted
-    survivors = [p for p in game.players.values() if p.is_alive]
-    all_voted = len(current_round.revival_votes) >= len(survivors)
+        current_round.revival_votes[voter_id] = target_id
 
-    print(f"REVIVAL: {voter.name} voted for {target.name}. {len(current_round.revival_votes)}/{len(survivors)} voted", flush=True)
+        # Check if all survivors have voted
+        survivors = [p for p in game.players.values() if p.is_alive]
+        all_voted = len(current_round.revival_votes) >= len(survivors)
+        result = None
 
-    # Auto-advance when all votes are cast
-    if all_voted:
-        votes = list(current_round.revival_votes.values())
-        unique_targets = set(votes)
+        print(f"REVIVAL: {voter.name} voted for {target.name}. {len(current_round.revival_votes)}/{len(survivors)} voted", flush=True)
 
-        if len(unique_targets) == 1 and len(votes) == len(survivors):
-            # Unanimous! Spawn revival judgement
-            revived_id = votes[0]
-            current_round.revived_player_id = revived_id
-            current_round.status = "revival_judgement"
-            save_game(game)
+        if all_voted:
+            votes = list(current_round.revival_votes.values())
+            unique_targets = set(votes)
 
-            revived_name = game.players[revived_id].name
-            print(f"REVIVAL: Unanimous vote for {revived_name}! Auto-advancing to judgement", flush=True)
-            run_revival_judgement.spawn(code)
-            return {"status": "unanimous", "revived": True, "revived_player_id": revived_id, "auto_advanced": True}
-        else:
-            # Not unanimous, skip revival
-            current_round.status = "results"
-            save_game(game)
-            print(f"REVIVAL: Not unanimous ({len(unique_targets)} different targets), auto-advancing to results", flush=True)
-            return {"status": "not_unanimous", "revived": False, "auto_advanced": True}
+            if len(unique_targets) == 1 and len(votes) == len(survivors):
+                revived_id = votes[0]
+                current_round.revived_player_id = revived_id
+                current_round.status = "revival_judgement"
+                revived_name = game.players[revived_id].name
+                print(f"REVIVAL: Unanimous vote for {revived_name}! Auto-advancing to judgement", flush=True)
+                result = {"status": "unanimous", "revived": True, "revived_player_id": revived_id, "auto_advanced": True}
+            else:
+                current_round.status = "results"
+                print(f"REVIVAL: Not unanimous ({len(unique_targets)} different targets), auto-advancing to results", flush=True)
+                result = {"status": "not_unanimous", "revived": False, "auto_advanced": True}
 
-    save_game(game)
-    return {"status": "vote_recorded", "votes_cast": len(current_round.revival_votes), "survivors": len(survivors)}
+        save_game(game)
+
+        # Spawn revival judgement if unanimous (after save)
+        if result and result.get("status") == "unanimous":
+            run_revival_judgement.spawn(code, game.current_round_idx)
+
+        # Wait with jitter before verification
+        jitter = random.uniform(0.05, 0.15)
+        await asyncio.sleep(0.1 + jitter)
+
+        # Verify the vote was saved
+        verification = get_game(code)
+        if verification:
+            v_round = verification.rounds[verification.current_round_idx]
+            if voter_id in v_round.revival_votes and v_round.revival_votes[voter_id] == target_id:
+                if result:
+                    return result
+                return {"status": "vote_recorded", "votes_cast": len(v_round.revival_votes), "survivors": len(survivors)}
+
+        print(f"REVIVAL VOTE: Race condition for {voter_id[:8]}..., retry {attempt+1}/{max_retries}", flush=True)
+        backoff = (0.15 * (2 ** attempt)) + random.uniform(0, 0.1)
+        await asyncio.sleep(min(backoff, 2.0))
+
+    raise HTTPException(status_code=500, detail="Failed to record vote due to concurrent modifications")
 
 
 @web_app.post("/api/advance_revival")
@@ -3521,7 +4214,7 @@ async def api_advance_revival(request: Request):
 
         revived_name = game.players[revived_id].name
         print(f"REVIVAL: Unanimous vote for {revived_name}! Spawning revival judgement", flush=True)
-        run_revival_judgement.spawn(code)
+        run_revival_judgement.spawn(code, game.current_round_idx)
         return {"status": "unanimous", "revived": True, "revived_player_id": revived_id}
     else:
         # Not unanimous, skip revival
@@ -3534,7 +4227,7 @@ async def api_advance_revival(request: Request):
 # --- SACRIFICE JUDGEMENT ASYNC FUNCTION ---
 
 @app.function(image=image, secrets=secrets)
-def run_sacrifice_judgement(game_code: str):
+def run_sacrifice_judgement(game_code: str, expected_round_idx: int = -1):
     """Judge the martyr's death - was it epic or lame?"""
     import json
     import asyncio
@@ -3543,6 +4236,11 @@ def run_sacrifice_judgement(game_code: str):
         game = get_game(game_code)
         if not game:
             print(f"SACRIFICE JUDGEMENT: Game {game_code} not found!", flush=True)
+            return
+
+        # Verify we're still on the expected round
+        if expected_round_idx >= 0 and game.current_round_idx != expected_round_idx:
+            print(f"SACRIFICE JUDGEMENT: Round mismatch! Expected {expected_round_idx}, got {game.current_round_idx}. Aborting.", flush=True)
             return
 
         current_round = game.rounds[game.current_round_idx]
@@ -3565,19 +4263,61 @@ def run_sacrifice_judgement(game_code: str):
             reason = "The simulation glitched during judgement..."
             visual_prompt = "A figure fading into digital static"
 
-        # Generate image
-        themed_prompt = apply_style_theme(visual_prompt, current_round.style_theme)
-        image_url = await generate_image_fal_async(themed_prompt)
+        # Generate images for ALL players in parallel
+        image_tasks = []
+        player_ids = []
+
+        # Martyr image (from LLM visual_prompt)
+        martyr_prompt = apply_style_theme(visual_prompt, current_round.style_theme)
+        image_tasks.append(generate_image_fal_async(martyr_prompt))
+        player_ids.append(("martyr", martyr_id))
+
+        # Get scenario hint for survivor/death images
+        scenario_hint = current_round.scenario_text[:150] if current_round.scenario_text else "a dangerous situation"
+
+        if epic:
+            # Epic death: generate survivor images for all alive players
+            for pid, p in game.players.items():
+                if pid != martyr_id and p.is_alive:
+                    survivor_prompt = prompts.format_prompt(
+                        prompts.SACRIFICE_SURVIVOR_IMAGE,
+                        player_name=p.name,
+                        scenario_hint=scenario_hint
+                    )
+                    themed = apply_style_theme(survivor_prompt, current_round.style_theme)
+                    image_tasks.append(generate_image_fal_async(themed))
+                    player_ids.append(("survivor", pid))
+        else:
+            # Lame death: generate death images for all other players
+            for pid, p in game.players.items():
+                if pid != martyr_id:
+                    death_prompt = prompts.format_prompt(
+                        prompts.SACRIFICE_FAILED_DEATH_IMAGE,
+                        player_name=p.name,
+                        scenario_hint=scenario_hint
+                    )
+                    themed = apply_style_theme(death_prompt, current_round.style_theme)
+                    image_tasks.append(generate_image_fal_async(themed))
+                    player_ids.append(("failed", pid))
+
+        # Run all image generation in parallel
+        print(f"SACRIFICE JUDGEMENT: Generating {len(image_tasks)} images in parallel", flush=True)
+        image_results = await asyncio.gather(*image_tasks)
+
+        # Assign images to players
+        for (role, pid), image_url in zip(player_ids, image_results):
+            if image_url:
+                game.players[pid].result_image_url = image_url
+                if role == "martyr":
+                    current_round.martyr_image_url = image_url
 
         # Store results
         current_round.martyr_epic = epic
         current_round.martyr_reason = reason
-        current_round.martyr_image_url = image_url
 
         # Apply consequences
         martyr.is_alive = False
         martyr.death_reason = reason
-        martyr.result_image_url = image_url
 
         if epic:
             # Epic death: Martyr +500, all others survive and get +100
@@ -3599,6 +4339,12 @@ def run_sacrifice_judgement(game_code: str):
 
         current_round.status = "results"
         save_game(game)
+
+        # Trigger video pre-generation on round 1 results (only once)
+        if game.current_round_idx == 0 and game.videos_status == "pending":
+            print("SACRIFICE JUDGEMENT: Round 1 complete, spawning video pre-generation", flush=True)
+            prewarm_player_videos.spawn(game.code)
+
         print(f"SACRIFICE JUDGEMENT: Complete!", flush=True)
 
     asyncio.run(judge_sacrifice())
@@ -3650,7 +4396,7 @@ async def judge_sacrifice_llm_async(speech: str, martyr_name: str):
 # --- LAST STAND HARSH JUDGEMENT ---
 
 @app.function(image=image, secrets=secrets)
-def run_last_stand_judgement(game_code: str):
+def run_last_stand_judgement(game_code: str, expected_round_idx: int = -1):
     """Run HARSH judgement for Last Stand round - only ~20-30% should survive."""
     import json
     import asyncio
@@ -3690,6 +4436,11 @@ def run_last_stand_judgement(game_code: str):
             print(f"LAST STAND JUDGEMENT: Game {game_code} not found!", flush=True)
             return
 
+        # Verify we're still on the expected round
+        if expected_round_idx >= 0 and game.current_round_idx != expected_round_idx:
+            print(f"LAST STAND JUDGEMENT: Round mismatch! Expected {expected_round_idx}, got {game.current_round_idx}. Aborting.", flush=True)
+            return
+
         current_round = game.rounds[game.current_round_idx]
 
         # Collect all players that need judging
@@ -3724,11 +4475,18 @@ def run_last_stand_judgement(game_code: str):
         if survivors and dead_players:
             # Go to revival phase
             current_round.status = "last_stand_revival"
+            current_round.vote_start_time = time.time()
             print(f"LAST STAND: {len(survivors)} survivors, {len(dead_players)} dead - entering revival phase", flush=True)
         else:
             # Skip revival - either everyone survived or everyone died
             current_round.status = "results"
             print(f"LAST STAND: Skipping revival (survivors={len(survivors)}, dead={len(dead_players)})", flush=True)
+
+            # Trigger video pre-generation on round 1 results (only once)
+            # Note: Only trigger here when skipping revival (going directly to results)
+            if game.current_round_idx == 0 and game.videos_status == "pending":
+                print("LAST STAND: Round 1 complete, spawning video pre-generation", flush=True)
+                prewarm_player_videos.spawn(game.code)
 
         save_game(game)
         print(f"LAST STAND JUDGEMENT: Complete!", flush=True)
@@ -3781,7 +4539,7 @@ async def judge_strategy_harsh_async(scenario: str, strategy: str):
 # --- REVIVAL JUDGEMENT ---
 
 @app.function(image=image, secrets=secrets)
-def run_revival_judgement(game_code: str):
+def run_revival_judgement(game_code: str, expected_round_idx: int = -1):
     """Re-judge the revived player with a bonus for teamwork."""
     import json
     import asyncio
@@ -3790,6 +4548,11 @@ def run_revival_judgement(game_code: str):
         game = get_game(game_code)
         if not game:
             print(f"REVIVAL JUDGEMENT: Game {game_code} not found!", flush=True)
+            return
+
+        # Verify we're still on the expected round
+        if expected_round_idx >= 0 and game.current_round_idx != expected_round_idx:
+            print(f"REVIVAL JUDGEMENT: Round mismatch! Expected {expected_round_idx}, got {game.current_round_idx}. Aborting.", flush=True)
             return
 
         current_round = game.rounds[game.current_round_idx]
@@ -3839,6 +4602,12 @@ def run_revival_judgement(game_code: str):
 
         current_round.status = "results"
         save_game(game)
+
+        # Trigger video pre-generation on round 1 results (only once)
+        if game.current_round_idx == 0 and game.videos_status == "pending":
+            print("REVIVAL JUDGEMENT: Round 1 complete, spawning video pre-generation", flush=True)
+            prewarm_player_videos.spawn(game.code)
+
         print(f"REVIVAL JUDGEMENT: Complete!", flush=True)
 
     asyncio.run(do_revival_judgement())
@@ -3899,7 +4668,7 @@ web_app.mount("/", StaticFiles(directory="/assets", html=True, check_dir=False),
     image=image, 
     secrets=secrets
 )
-@modal.asgi_app(label="mas-ai-game")
+@modal.asgi_app(label="survaive-game")
 def fastapi_app():
     return web_app
 

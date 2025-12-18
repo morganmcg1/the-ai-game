@@ -372,14 +372,14 @@ export function Lobby({ onJoin, onAdmin, setPlayerId }) {
             {/* Simulation intro tagline */}
             <p style={{
                 fontFamily: 'monospace',
-                color: '#0f0',
+                color: '#00F0FF',
                 fontSize: '0.8rem',
                 marginTop: '-1rem',
                 marginBottom: '1.5rem',
                 opacity: 0.8,
                 textAlign: 'center'
             }}>
-                &gt; CORRUPTED SIMULATION DETECTED // SURVIVE TO ESCAPE
+                CORRUPTED SIMULATION DETECTED // SURVIVE TO ESCAPE
             </p>
 
             {error && <div className="error-banner">{error}</div>}
@@ -698,12 +698,14 @@ export function Lobby({ onJoin, onAdmin, setPlayerId }) {
                             borderRadius: '8px',
                             border: '1px solid rgba(0,255,0,0.2)'
                         }}>
-                            <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem', color: '#0f0' }}>
+                            <div style={{ fontSize: '1.5rem', marginBottom: previewData.characterImageUrl ? '0' : '0.5rem', color: '#0f0' }}>
                                 {name.toUpperCase()}
                             </div>
-                            <div style={{ opacity: 0.7, fontSize: '0.9rem', fontFamily: 'monospace' }}>
-                                &gt; USER AVATAR RENDERING...
-                            </div>
+                            {!previewData.characterImageUrl && (
+                                <div style={{ opacity: 0.7, fontSize: '0.9rem', fontFamily: 'monospace' }}>
+                                    &gt; USER AVATAR RENDERING...
+                                </div>
+                            )}
                         </div>
 
                         {/* Character Image Preview */}

@@ -26,7 +26,7 @@ export function VotingView({ round, playerId, onVote }) {
         return (
             <div className="card" style={{ textAlign: 'center' }}>
                 <h2 style={{ fontFamily: 'monospace', color: 'var(--accent)' }}>SELECTION REGISTERED</h2>
-                <p style={{ fontFamily: 'monospace', color: '#0f0' }}>&gt; Awaiting other user inputs...</p>
+                <p style={{ fontFamily: 'monospace', color: '#0f0' }}>Awaiting other user inputs...</p>
                 <span className="loader"></span>
             </div>
         );
@@ -40,7 +40,7 @@ export function VotingView({ round, playerId, onVote }) {
                 SELECT NEXT ENVIRONMENT
             </h1>
             <p style={{ textAlign: 'center', marginBottom: '2rem', fontFamily: 'monospace', color: '#ccc' }}>
-                &gt; Choose which architect's environment will be loaded next.
+                Choose which architect's environment will be loaded next.
             </p>
 
             <div style={{

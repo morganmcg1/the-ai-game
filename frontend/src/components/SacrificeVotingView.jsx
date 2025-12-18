@@ -62,7 +62,7 @@ export function SacrificeVotingView({ round, playerId, players, onVote }) {
                 border: '1px solid rgba(255, 0, 0, 0.3)',
                 borderRadius: '4px'
             }}>
-                &gt; SACRIFICE SELECTION // CHOOSE THE MARTYR
+                SACRIFICE SELECTION // CHOOSE THE MARTYR
             </div>
 
             <h2 style={{

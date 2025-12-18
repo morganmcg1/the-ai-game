@@ -43,6 +43,29 @@ export function ResultsView({ round, players }) {
 
     const sacrificeSummary = getSacrificeSummary();
 
+    // Get round outcome summary for survival-type rounds
+    const getRoundSummary = () => {
+        // Skip for round types with their own summaries or no deaths
+        if (isSacrificeRound || isCooperativeRound || isRankedRound) return null;
+
+        const alivePlayers = Object.values(players).filter(p => p.is_alive);
+        const deadPlayers = Object.values(players).filter(p => !p.is_alive);
+        const total = Object.keys(players).length;
+
+        if (deadPlayers.length === total) {
+            return { text: "Total wipeout. No survivors.", color: 'var(--danger)' };
+        } else if (alivePlayers.length === total) {
+            return { text: "Everyone made it out alive.", color: 'var(--success)' };
+        } else {
+            return {
+                text: `${alivePlayers.length} survived. ${deadPlayers.length} didn't make it.`,
+                color: 'var(--warning)'
+            };
+        }
+    };
+
+    const roundSummary = getRoundSummary();
+
     const getTitle = () => {
         if (isCooperativeRound) return 'TEAM SYNC RESULTS';
         if (isRankedRound) return 'SURVIVAL RANKINGS';
@@ -51,7 +74,7 @@ export function ResultsView({ round, players }) {
 
     return (
         <div style={{ width: '100%', maxWidth: '1100px' }}>
-            <h1 className="glitch-text" style={{ textAlign: 'center', marginBottom: sacrificeSummary ? '1rem' : '2rem', color: isRankedRound ? '#ffd700' : undefined }}>
+            <h1 className="glitch-text" style={{ textAlign: 'center', marginBottom: (sacrificeSummary || roundSummary) ? '1rem' : '2rem', color: isRankedRound ? '#ffd700' : undefined }}>
                 {getTitle()}
             </h1>
 
@@ -66,6 +89,20 @@ export function ResultsView({ round, players }) {
                     fontStyle: 'italic'
                 }}>
                     {sacrificeSummary.text}
+                </p>
+            )}
+
+            {/* Survival round outcome summary */}
+            {roundSummary && (
+                <p style={{
+                    textAlign: 'center',
+                    marginBottom: '2rem',
+                    color: roundSummary.color,
+                    fontFamily: 'monospace',
+                    fontSize: '1.1rem',
+                    fontStyle: 'italic'
+                }}>
+                    {roundSummary.text}
                 </p>
             )}
 
@@ -225,6 +262,18 @@ export function ResultsView({ round, players }) {
                                             }}>
                                                 {rankStyle.icon}
                                             </span>
+                                            {player.character_image_url && (
+                                                <img
+                                                    src={player.character_image_url}
+                                                    alt=""
+                                                    style={{
+                                                        width: '24px',
+                                                        height: '24px',
+                                                        borderRadius: '50%',
+                                                        objectFit: 'cover'
+                                                    }}
+                                                />
+                                            )}
                                             <span style={{ color: '#fff', fontSize: '0.9rem' }}>{player.name}</span>
                                         </div>
                                         <span style={{
@@ -411,6 +460,18 @@ export function ResultsView({ round, players }) {
                                             }}>
                                                 {rankStyle.icon}
                                             </span>
+                                            {player.character_image_url && (
+                                                <img
+                                                    src={player.character_image_url}
+                                                    alt=""
+                                                    style={{
+                                                        width: '24px',
+                                                        height: '24px',
+                                                        borderRadius: '50%',
+                                                        objectFit: 'cover'
+                                                    }}
+                                                />
+                                            )}
                                             <span style={{ color: '#fff', fontSize: '0.9rem' }}>{player.name}</span>
                                         </div>
                                         <span style={{
@@ -597,6 +658,18 @@ export function ResultsView({ round, players }) {
                                             }}>
                                                 {rankStyle.icon}
                                             </span>
+                                            {player.character_image_url && (
+                                                <img
+                                                    src={player.character_image_url}
+                                                    alt=""
+                                                    style={{
+                                                        width: '24px',
+                                                        height: '24px',
+                                                        borderRadius: '50%',
+                                                        objectFit: 'cover'
+                                                    }}
+                                                />
+                                            )}
                                             <span style={{ color: '#fff', fontSize: '0.9rem' }}>{player.name}</span>
                                         </div>
                                         <span style={{

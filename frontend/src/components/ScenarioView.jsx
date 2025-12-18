@@ -17,12 +17,12 @@ export function ScenarioView({ round, isSpectating, maxRounds, flatBottom = fals
                 fontFamily: 'monospace',
                 marginBottom: '1.5rem',
                 padding: '1rem 1.25rem',
-                background: 'rgba(0, 255, 0, 0.05)',
-                border: '1px solid rgba(0, 255, 0, 0.2)',
+                background: 'rgba(0, 240, 255, 0.05)',
+                border: '1px solid rgba(0, 240, 255, 0.2)',
                 borderRadius: '4px'
             }}>
                 <div className="glitch-text" style={{
-                    color: '#0f0',
+                    color: '#00F0FF',
                     fontSize: '1.25rem',
                     letterSpacing: '0.1em',
                     marginBottom: round.system_message ? '0.5rem' : 0
@@ -32,11 +32,11 @@ export function ScenarioView({ round, isSpectating, maxRounds, flatBottom = fals
                 </div>
                 {round.system_message && (
                     <div style={{
-                        color: '#0f0',
+                        color: '#00F0FF',
                         fontSize: '1rem',
                         letterSpacing: '0.05em'
                     }}>
-                        &gt; {round.system_message}
+                        {round.system_message}
                     </div>
                 )}
             </div>

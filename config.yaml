@@ -15,11 +15,34 @@ game:
   # Timer for sacrifice death speech submission (in seconds)
   sacrifice_submission_timeout_seconds: 45
 
+  # Timer for voting phases (trap, coop, sacrifice, revival)
+  vote_timeout_seconds: 45
+
   # Default number of rounds per game
   default_max_rounds: 5
 
   # Player heartbeat timeout for inactivity (in seconds)
   player_inactive_timeout_seconds: 300
+
+# =============================================================================
+# ROUND CONFIGURATION - ROUND TYPES AND ORDER
+# =============================================================================
+
+rounds:
+  # List of round types in order. Valid types:
+  # - survival: Standard survival scenario
+  # - blind_architect: Players design traps for opponents
+  # - cooperative: Team-based round with voting
+  # - sacrifice: One player must die heroically
+  # - last_stand: Brutal final boss round
+  # - ranked: Comparative ranking (everyone survives, points by rank)
+  config:
+    # - survival
+    # - survival
+    # - cooperative
+    # - sacrifice
+    # - last_stand
+    - last_stand
 
 # =============================================================================
 # LLM API SETTINGS

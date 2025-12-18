@@ -59,7 +59,7 @@ export function TrapView({ round, playerId, onSubmit, config = {} }) {
         return (
             <div className="card" style={{ textAlign: 'center' }}>
                 <h2 style={{ fontFamily: 'monospace', color: 'var(--accent)' }}>ENVIRONMENT UPLOADED</h2>
-                <p style={{ fontFamily: 'monospace', color: '#0f0' }}>&gt; Rendering deadly scenario...</p>
+                <p style={{ fontFamily: 'monospace', color: '#0f0' }}>Rendering deadly scenario...</p>
                 <span className="loader"></span>
             </div>
         );
@@ -114,7 +114,7 @@ export function TrapView({ round, playerId, onSubmit, config = {} }) {
                 borderRadius: '4px',
                 animation: 'flicker 2s infinite'
             }}>
-                &gt; SECURITY BREACH // ARCHITECT PERMISSIONS GRANTED
+                SECURITY BREACH // ARCHITECT PERMISSIONS GRANTED
             </div>
 
             <h2 style={{ marginBottom: '1rem', color: 'var(--accent)', fontFamily: 'monospace' }}>ARCHITECT MODE</h2>

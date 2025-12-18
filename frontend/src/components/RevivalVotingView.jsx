@@ -50,7 +50,7 @@ export function RevivalVotingView({ round, playerId, players, isAdmin, onVote, o
                     border: '1px solid rgba(100, 100, 100, 0.3)',
                     borderRadius: '4px'
                 }}>
-                    &gt; DECEASED // AWAITING POTENTIAL REVIVAL
+                    DECEASED // AWAITING POTENTIAL REVIVAL
                 </div>
 
                 <h2 style={{
@@ -123,7 +123,7 @@ export function RevivalVotingView({ round, playerId, players, isAdmin, onVote, o
                 border: '1px solid rgba(0, 255, 0, 0.3)',
                 borderRadius: '4px'
             }}>
-                &gt; REVIVAL PROTOCOL // UNANIMOUS VOTE REQUIRED
+                REVIVAL PROTOCOL // UNANIMOUS VOTE REQUIRED
             </div>
 
             <h2 style={{

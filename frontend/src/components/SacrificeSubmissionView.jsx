@@ -77,14 +77,14 @@ export function SacrificeSubmissionView({ round, playerId, players, onSubmit, co
                         border: '1px solid rgba(255, 215, 0, 0.3)',
                         borderRadius: '4px'
                     }}>
-                        &gt; SACRIFICE RECORDED // EVALUATING HEROISM
+                        SACRIFICE RECORDED // EVALUATING HEROISM
                     </div>
                     <h2 style={{ fontFamily: 'monospace', color: '#ffd700' }}>
                         <Heart size={24} style={{ marginRight: '0.5rem' }} />
                         YOUR SACRIFICE HAS BEEN WITNESSED
                     </h2>
                     <p style={{ fontFamily: 'monospace', color: '#0f0', marginTop: '1rem' }}>
-                        &gt; Evaluating the epicness of your death...
+                        Evaluating the epicness of your death...
                     </p>
                     <span className="loader" style={{ marginTop: '1rem' }}></span>
                 </div>
@@ -139,7 +139,7 @@ export function SacrificeSubmissionView({ round, playerId, players, onSubmit, co
                     borderRadius: '4px',
                     animation: 'flicker 2s infinite'
                 }}>
-                    &gt; YOU HAVE BEEN CHOSEN // PREPARE YOUR FINAL MOMENTS
+                    YOU HAVE BEEN CHOSEN // PREPARE YOUR FINAL MOMENTS
                 </div>
 
                 <h2 style={{
@@ -266,7 +266,7 @@ export function SacrificeSubmissionView({ round, playerId, players, onSubmit, co
                 border: '1px solid rgba(0, 255, 255, 0.3)',
                 borderRadius: '4px'
             }}>
-                &gt; SACRIFICE IN PROGRESS // WITNESS MODE ACTIVE
+                SACRIFICE IN PROGRESS // WITNESS MODE ACTIVE
             </div>
 
             <h2 style={{
