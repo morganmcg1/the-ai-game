@@ -3,14 +3,22 @@ import os
 # Enforce the 'ai-game' environment
 os.environ["MODAL_ENVIRONMENT"] = "ai-game"
 
+import asyncio
 import modal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Dict, Optional, Literal
 import time
 import uuid
 import random
 
 import prompts
+
+# --- Input Validation Constants ---
+MAX_STRATEGY_LENGTH = 2000
+MAX_TRAP_TEXT_LENGTH = 1000
+MAX_SPEECH_LENGTH = 2000
+MAX_NAME_LENGTH = 50
+MAX_CHARACTER_DESCRIPTION_LENGTH = 500
 
 # --- Video Style Themes ---
 # Each game ending randomly selects one theme for all player videos
@@ -1169,13 +1177,18 @@ async def api_join_game(request: Request):
     game state, modify it locally, and save - causing last-write-wins data loss.
     This retry-and-verify pattern ensures all joins are preserved.
     """
-    import asyncio
 
     code = request.query_params.get("code")
     data = await request.json()
     player_name = data.get("name", "Unknown Player")
     character_description = data.get("character_description")
     character_image_url = data.get("character_image_url")  # Pre-generated image (from random selection)
+    
+    # Validate input lengths
+    if len(player_name) > MAX_NAME_LENGTH:
+        raise HTTPException(status_code=400, detail=f"Name too long (max {MAX_NAME_LENGTH} characters)")
+    if character_description and len(character_description) > MAX_CHARACTER_DESCRIPTION_LENGTH:
+        raise HTTPException(status_code=400, detail=f"Character description too long (max {MAX_CHARACTER_DESCRIPTION_LENGTH} characters)")
 
     # Generate player ID upfront (consistent across retries)
     player_id = str(uuid.uuid4())
@@ -1636,6 +1649,12 @@ async def api_start_game(request: Request):
     if not game:
         print("API: Game not found")
         raise HTTPException(status_code=404, detail="Game not found")
+    
+    # Guard: only allow starting from lobby state with no rounds
+    if game.status != "lobby":
+        raise HTTPException(status_code=400, detail=f"Cannot start game: game is already in '{game.status}' state")
+    if len(game.rounds) > 0:
+        raise HTTPException(status_code=400, detail="Cannot start game: game already has rounds")
 
     # Use pre-warmed scenario if available, otherwise generate on-demand (fallback)
     if game.prewarmed_scenarios and len(game.prewarmed_scenarios) > 0 and game.prewarmed_scenarios[0]:
@@ -1643,7 +1662,8 @@ async def api_start_game(request: Request):
         print(f"API: Using pre-warmed scenario: {scenario_text[:50]}...")
     else:
         print("API: No pre-warmed scenario, generating on-demand...")
-        scenario_text = generate_scenario_llm(1, game.max_rounds)
+        # Use asyncio.to_thread to avoid blocking the event loop
+        scenario_text = await asyncio.to_thread(generate_scenario_llm, 1, game.max_rounds)
         print(f"API: Scenario Generated: {scenario_text}")
         # Re-fetch after slow operation
         game = get_game(code)
@@ -1948,12 +1968,22 @@ def generate_character_image(game_code: str, player_id: str, character_prompt: s
 @app.function(image=image, secrets=secrets)
 def prewarm_all_scenarios(game_code: str):
     """Pre-generate scenarios for ALL rounds in parallel when game is created."""
-    import asyncio
 
     async def do_prewarm():
-        game = get_game(game_code)
+        # Retry fetching game with backoff to handle eventual consistency
+        max_fetch_retries = 10
+        game = None
+        for attempt in range(max_fetch_retries):
+            game = get_game(game_code)
+            if game:
+                break
+            jitter = random.uniform(0.1, 0.3)
+            wait_time = 0.2 * (1.5 ** attempt) + jitter
+            print(f"PREWARM: Game {game_code} not found, retry {attempt + 1}/{max_fetch_retries} in {wait_time:.2f}s", flush=True)
+            await asyncio.sleep(min(wait_time, 3.0))
+        
         if not game:
-            print(f"PREWARM: Game {game_code} not found!", flush=True)
+            print(f"PREWARM: Game {game_code} not found after {max_fetch_retries} retries!", flush=True)
             return
 
         if game.status != "lobby":
@@ -3051,13 +3081,17 @@ async def api_submit_strategy(request: Request):
         # 1. First fetch to validate and save strategy
         game = get_game(code)
         player_id = data.get("player_id")
-        strategy = data.get("strategy")
+        strategy = data.get("strategy", "")
         
         if not game:
              print("API: Game not found (submit)")
              raise HTTPException(status_code=404, detail="Game not found")
         if not player_id:
              raise HTTPException(status_code=400, detail="Missing player_id")
+        
+        # Validate input length
+        if len(strategy) > MAX_STRATEGY_LENGTH:
+            raise HTTPException(status_code=400, detail=f"Strategy too long (max {MAX_STRATEGY_LENGTH} characters)")
         
         current_round = game.rounds[game.current_round_idx]
         if current_round.status != "strategy": 
@@ -3174,17 +3208,23 @@ async def api_submit_trap(request: Request):
     data = await request.json()
     game = get_game(code)
     player_id = data.get("player_id")
-    trap_text = data.get("trap_text")
+    trap_text = data.get("trap_text", "")
     
-    if not game: raise HTTPException(status_code=404, detail="Game not found")
+    if not game: 
+        raise HTTPException(status_code=404, detail="Game not found")
+    
+    # Validate input length
+    if len(trap_text) > MAX_TRAP_TEXT_LENGTH:
+        raise HTTPException(status_code=400, detail=f"Trap text too long (max {MAX_TRAP_TEXT_LENGTH} characters)")
 
     current_round = game.rounds[game.current_round_idx]
     current_round.trap_proposals[player_id] = trap_text
 
-    # Generate trap image with round's style theme
+    # Generate trap image with round's style theme (async to avoid blocking)
     themed_prompt = apply_style_theme(trap_text, current_round.style_theme)
-    img_url = generate_image_fal(themed_prompt)
-    if img_url: current_round.trap_images[player_id] = img_url
+    img_url = await generate_image_fal_async(themed_prompt, use_case="trap_image")
+    if img_url: 
+        current_round.trap_images[player_id] = img_url
         
     alive_players = [p for p in game.players.values() if p.is_alive and p.in_lobby]
     if len(current_round.trap_proposals) >= len(alive_players):
@@ -3317,7 +3357,18 @@ async def api_vote_coop(request: Request):
 async def api_next_round(request: Request):
     code = request.query_params.get("code")
     game = get_game(code)
-    if not game: raise HTTPException(status_code=404, detail="Game not found")
+    if not game: 
+        raise HTTPException(status_code=404, detail="Game not found")
+    
+    # Guard: only allow advancing from playing state
+    if game.status != "playing":
+        raise HTTPException(status_code=400, detail=f"Cannot advance round: game is in '{game.status}' state")
+    
+    # Guard: current round must be in results state
+    if game.rounds and game.current_round_idx >= 0:
+        current_round = game.rounds[game.current_round_idx]
+        if current_round.status != "results":
+            raise HTTPException(status_code=400, detail=f"Cannot advance round: current round is in '{current_round.status}' state, not 'results'")
 
     next_idx = game.current_round_idx + 1
     if next_idx >= game.max_rounds:
@@ -3385,7 +3436,8 @@ async def api_next_round(request: Request):
             print(f"API: Using pre-warmed scenario for round {next_idx + 1}", flush=True)
         else:
             print(f"API: No pre-warmed scenario for round {next_idx + 1}, generating on-demand...", flush=True)
-            new_round.scenario_text = generate_scenario_llm(next_idx + 1, game.max_rounds)
+            # Use asyncio.to_thread to avoid blocking the event loop
+            new_round.scenario_text = await asyncio.to_thread(generate_scenario_llm, next_idx + 1, game.max_rounds)
 
     save_game(game)
     return {"status": "started_round", "round": next_idx + 1, "type": round_type}
@@ -4050,6 +4102,10 @@ async def api_submit_sacrifice_speech(request: Request):
     data = await request.json()
     player_id = data.get("player_id")
     speech = data.get("speech", "")
+    
+    # Validate input length
+    if len(speech) > MAX_SPEECH_LENGTH:
+        raise HTTPException(status_code=400, detail=f"Speech too long (max {MAX_SPEECH_LENGTH} characters)")
 
     game = get_game(code)
     if not game:
