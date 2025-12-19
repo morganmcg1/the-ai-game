@@ -7,22 +7,16 @@
 
 game:
   # Timer for submission phases (in seconds)
-  submission_timeout_seconds: 30
+  submission_timeout_seconds: 60
 
   # Timer for sacrifice volunteer phase (in seconds)
-  volunteer_timeout_seconds: 15
+  volunteer_timeout_seconds: 20
 
   # Timer for sacrifice death speech submission (in seconds)
-  sacrifice_submission_timeout_seconds: 45
+  sacrifice_submission_timeout_seconds: 60
 
   # Timer for voting phases (trap, coop, sacrifice, revival)
-  vote_timeout_seconds: 45
-
-  # Default number of rounds per game
-  default_max_rounds: 5
-
-  # Player heartbeat timeout for inactivity (in seconds)
-  player_inactive_timeout_seconds: 300
+  vote_timeout_seconds: 60
 
 # =============================================================================
 # ROUND CONFIGURATION - ROUND TYPES AND ORDER
@@ -37,11 +31,13 @@ rounds:
   # - last_stand: Brutal final boss round
   # - ranked: Comparative ranking (everyone survives, points by rank)
   config:
+    - survival
+    - survival
     # - survival
-    # - survival
+    - cooperative
     # - cooperative
-    # - sacrifice
-    # - last_stand
+    # - cooperative
+    - sacrifice
     - last_stand
 
 # =============================================================================

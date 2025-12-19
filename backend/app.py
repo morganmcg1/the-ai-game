@@ -1125,6 +1125,7 @@ class GameState(BaseModel):
     player_winner_videos: Dict[str, str] = {}  # player_id -> winner video URL
     player_loser_videos: Dict[str, str] = {}   # player_id -> loser video URL
     videos_status: Literal["pending", "generating", "ready", "partial", "failed"] = "pending"
+    videos_started_at: Optional[float] = None  # Timestamp when video generation started (for stuck-job detection)
     video_theme: Optional[str] = None  # Consistent theme for all videos
     winner_id: Optional[str] = None
 
@@ -1211,6 +1212,58 @@ async def update_game_with_retry(
         await asyncio.sleep(min(backoff, 2.0))
     
     raise HTTPException(status_code=500, detail=error_message)
+
+
+# --- Video Pre-generation Helper ---
+# Maximum time to wait for video generation before considering it stuck (20 minutes)
+VIDEO_GENERATION_TIMEOUT_SECONDS = 20 * 60
+
+def maybe_spawn_video_prewarm(game: GameState) -> bool:
+    """
+    Atomically check and spawn video pre-generation if not already started.
+
+    This helper ensures:
+    1. Video generation is only spawned once (idempotent)
+    2. Status is set to "generating" BEFORE spawning (prevents duplicates)
+    3. Start timestamp is recorded (enables stuck-job detection)
+
+    Args:
+        game: The game state object (will be modified and saved)
+
+    Returns:
+        True if prewarm was spawned, False if already in progress or complete
+    """
+    if game.videos_status != "pending":
+        print(f"VIDEO PREWARM: Not spawning - status is {game.videos_status}", flush=True)
+        return False
+
+    # Set status BEFORE spawning to prevent race conditions
+    game.videos_status = "generating"
+    game.videos_started_at = time.time()
+    save_game(game)
+
+    print(f"VIDEO PREWARM: Spawning video generation for game {game.code}", flush=True)
+    prewarm_player_videos.spawn(game.code)
+    return True
+
+
+def is_video_generation_stuck(game: GameState) -> bool:
+    """
+    Check if video generation appears to be stuck.
+
+    Returns True if:
+    - Status is "generating"
+    - AND it started more than VIDEO_GENERATION_TIMEOUT_SECONDS ago
+    """
+    if game.videos_status != "generating":
+        return False
+
+    if game.videos_started_at is None:
+        # No start time recorded - assume stuck if status is generating
+        return True
+
+    elapsed = time.time() - game.videos_started_at
+    return elapsed > VIDEO_GENERATION_TIMEOUT_SECONDS
 
 
 # --- Core Game Logic & API ---
@@ -2271,9 +2324,8 @@ def run_round_judgement(game_code: str, expected_round_idx: int = -1):
         print(f"JUDGEMENT: Setting status to results", flush=True)
 
         # Trigger video pre-generation on round 1 results (only once)
-        if game.current_round_idx == 0 and game.videos_status == "pending":
-            print(f"JUDGEMENT: Round 1 complete, spawning video pre-generation", flush=True)
-            prewarm_player_videos.spawn(game.code)
+        if game.current_round_idx == 0:
+            maybe_spawn_video_prewarm(game)
 
         print(f"JUDGEMENT: Complete!", flush=True)
 
@@ -2406,9 +2458,8 @@ def run_ranked_judgement(game_code: str, expected_round_idx: int = -1):
         save_game(game)
 
         # Trigger video pre-generation on round 1 results (only once)
-        if game.current_round_idx == 0 and game.videos_status == "pending":
-            print("RANKED_JUDGE: Round 1 complete, spawning video pre-generation", flush=True)
-            prewarm_player_videos.spawn(game.code)
+        if game.current_round_idx == 0:
+            maybe_spawn_video_prewarm(game)
 
         print("RANKED_JUDGE: Complete!", flush=True)
 
@@ -2508,6 +2559,17 @@ def judge_single_player(game_code: str, player_id: str):
         if current_round.status in ["strategy", "judgement"] and all_submitted and not any_pending:
             print("EARLY_JUDGE: All judgements complete! Transitioning to results.", flush=True)
             current_round.status = "results"
+
+            # Trigger video pre-generation on round 1 results (this is the key fix for early judgement path)
+            if game.current_round_idx == 0 and game.videos_status == "pending":
+                print("EARLY_JUDGE: Round 1 complete, triggering video pre-generation", flush=True)
+                # Set status before save to prevent race with other early judges
+                game.videos_status = "generating"
+                game.videos_started_at = time.time()
+                save_game(game)
+                prewarm_player_videos.spawn(game.code)
+                print(f"EARLY_JUDGE: Complete for {player.name}!", flush=True)
+                return  # Already saved, exit early
 
         save_game(game)
         print(f"EARLY_JUDGE: Complete for {player.name}!", flush=True)
@@ -2923,7 +2985,20 @@ def prewarm_player_videos(game_code: str):
 
             save_game(game)
 
-    asyncio.run(do_prewarm_videos())
+    # Wrap in try/except to ensure we mark as failed if any unexpected error occurs
+    try:
+        asyncio.run(do_prewarm_videos())
+    except Exception as e:
+        print(f"PREWARM VIDEO: FATAL ERROR - {e}", flush=True)
+        # Try to mark as failed so retry is possible
+        try:
+            game = get_game(game_code)
+            if game and game.videos_status == "generating":
+                game.videos_status = "failed"
+                save_game(game)
+                print(f"PREWARM VIDEO: Marked as failed for recovery", flush=True)
+        except Exception as save_err:
+            print(f"PREWARM VIDEO: Could not save failed status: {save_err}", flush=True)
 
 
 # --- Cooperative Round Functions ---
@@ -3129,9 +3204,8 @@ def run_coop_judgement(game_code: str, expected_round_idx: int = -1):
         save_game(game)
 
         # Trigger video pre-generation on round 1 results (only once)
-        if game.current_round_idx == 0 and game.videos_status == "pending":
-            print("COOP JUDGE: Round 1 complete, spawning video pre-generation", flush=True)
-            prewarm_player_videos.spawn(game.code)
+        if game.current_round_idx == 0:
+            maybe_spawn_video_prewarm(game)
 
         print("COOP JUDGE: Complete!", flush=True)
 
@@ -3464,6 +3538,7 @@ async def api_next_round(request: Request):
         if game.videos_status == "pending":
             print(f"API: Game finished but videos not pre-generated, spawning now for {code}", flush=True)
             game.videos_status = "generating"
+            game.videos_started_at = time.time()
             save_game(game)
             prewarm_player_videos.spawn(code)
         else:
@@ -3534,11 +3609,19 @@ async def api_retry_player_videos(request: Request):
     if game.status != "finished":
         raise HTTPException(status_code=400, detail="Game not finished")
 
+    # Check if generation is stuck (past timeout)
     if game.videos_status == "generating":
-        return {"status": "already_generating"}
+        if is_video_generation_stuck(game):
+            # Generation appears stuck - allow retry
+            elapsed = time.time() - (game.videos_started_at or 0)
+            print(f"API: Video generation stuck ({elapsed:.0f}s elapsed), allowing retry for {code}", flush=True)
+        else:
+            # Still within timeout window - don't allow duplicate spawn
+            return {"status": "already_generating"}
 
     # Reset status and spawn new generation
     game.videos_status = "generating"
+    game.videos_started_at = time.time()
     game.player_winner_videos = {}  # Clear any partial results
     game.player_loser_videos = {}
     save_game(game)
@@ -4478,9 +4561,8 @@ def run_sacrifice_judgement(game_code: str, expected_round_idx: int = -1):
         save_game(game)
 
         # Trigger video pre-generation on round 1 results (only once)
-        if game.current_round_idx == 0 and game.videos_status == "pending":
-            print("SACRIFICE JUDGEMENT: Round 1 complete, spawning video pre-generation", flush=True)
-            prewarm_player_videos.spawn(game.code)
+        if game.current_round_idx == 0:
+            maybe_spawn_video_prewarm(game)
 
         print(f"SACRIFICE JUDGEMENT: Complete!", flush=True)
 
@@ -4619,13 +4701,13 @@ def run_last_stand_judgement(game_code: str, expected_round_idx: int = -1):
             current_round.status = "results"
             print(f"LAST STAND: Skipping revival (survivors={len(survivors)}, dead={len(dead_players)})", flush=True)
 
-            # Trigger video pre-generation on round 1 results (only once)
-            # Note: Only trigger here when skipping revival (going directly to results)
-            if game.current_round_idx == 0 and game.videos_status == "pending":
-                print("LAST STAND: Round 1 complete, spawning video pre-generation", flush=True)
-                prewarm_player_videos.spawn(game.code)
-
         save_game(game)
+
+        # Trigger video pre-generation on round 1 results (only once)
+        # Note: This runs after save, for both revival and non-revival paths
+        if game.current_round_idx == 0:
+            maybe_spawn_video_prewarm(game)
+
         print(f"LAST STAND JUDGEMENT: Complete!", flush=True)
 
     asyncio.run(run_all_judgements())
@@ -4741,9 +4823,8 @@ def run_revival_judgement(game_code: str, expected_round_idx: int = -1):
         save_game(game)
 
         # Trigger video pre-generation on round 1 results (only once)
-        if game.current_round_idx == 0 and game.videos_status == "pending":
-            print("REVIVAL JUDGEMENT: Round 1 complete, spawning video pre-generation", flush=True)
-            prewarm_player_videos.spawn(game.code)
+        if game.current_round_idx == 0:
+            maybe_spawn_video_prewarm(game)
 
         print(f"REVIVAL JUDGEMENT: Complete!", flush=True)
 

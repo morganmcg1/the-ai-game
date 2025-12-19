@@ -103,32 +103,62 @@ Generate ONLY the scenario, nothing else:"""
 # STRATEGY JUDGEMENT PROMPTS
 # =============================================================================
 
-STRATEGY_JUDGEMENT = """Judge if this survival strategy works. Be harsh but fair.
+STRATEGY_JUDGEMENT = """Judge if the given player's submitted survival strategy works. Be harsh but fair.
 
-SCENARIO: {{scenario}}
+## Challenge Scenario
 
-STRATEGY: {{strategy}}
+The challenge sceanrio for the player to survive or die is:
 
-Rules:
+{{scenario}}
+
+## Player Strategy
+
+The player's submitted strategy to survive or die the scenario is:
+
+{{strategy}}
+
+## Judgement Rules
+
 - Clever, creative, or funny strategies SURVIVE
-- Generic, lazy, or nonsensical strategies DIE
+- Generic, lazy, near-empty, or nonsensical strategies DIE
 - Must actually address the threat
 
-IMPORTANT - Keep "reason" SHORT (1-2 sentences, under 30 words). Focus on what happened, not glitchy/meta stuff. Can be darkly funny.
+## Return Fields
 
-Good reasons: "The shark wasn't impressed by diplomacy." / "Your torch scared them off long enough to escape."
-Bad reasons: "Your data fragmented across corrupted memory sectors as the simulation..." (too long/meta)
+- "survived": true/false
+- "reason": 1-2 sentences explaining why the strategy caused the player to survive or die
+- "visual_prompt": an image generation prompt of a scene that describes the player's character's moment of \
+glory/mediocrity in this context of the challenge and submitted strategy. This is used to generate an image \
+of the player's character's moment of survival or death.
 
-JSON only, no markdown:
+## Reason for judgment descision
+
+- IMPORTANT - Keep the output field "reason" SHORT (1-2 sentences, under 30 words). Focus on what happened, not glitchy/meta stuff. Can be darkly funny.
+
+- Good reasons: "The shark wasn't impressed by diplomacy." / "Your torch scared them off long enough to escape."
+- Bad reasons: "Your data fragmented across corrupted memory sectors as the simulation..." (too long/meta)
+
+## Return Format
+
+Return JSON only, no markdown:
 {{"survived": true/false, "reason": "1-2 sentences max", "visual_prompt": "scene for image"}}"""
 
 
 RANKED_JUDGEMENT = """You are judging a survival game. Given a deadly scenario, rank all player strategies from BEST to WORST.
 
-SCENARIO: {{scenario}}
+## Challenge Scenario
 
-PLAYER STRATEGIES:
+The challenge sceanrio for the players to rank is:
+
+{{scenario}}
+
+## Player Strategies
+
+The player's submitted strategies to rank are:
+
 {{strategy_list}}
+
+## Ranking Criteria
 
 RANKING CRITERIA (in order of importance):
 1. CREATIVITY - Original, unexpected approaches beat generic solutions
@@ -136,12 +166,23 @@ RANKING CRITERIA (in order of importance):
 3. ENTERTAINMENT VALUE - Funny, dramatic, or memorable strategies rank higher
 4. SPECIFICITY - Detailed plans beat vague "I run away" responses
 
-IMPORTANT RULES:
+## Important Rules
+
 - Everyone survives this round (it's about WHO survives BEST)
 - Rank from 1 (best) to {{num_strategies}} (worst)
 - No ties allowed - you must pick a winner
 - Give each player 1-2 sentences of commentary explaining their rank
 - Generate a visual_prompt for each player showing their moment of glory/mediocrity
+
+## Return Format
+
+- "rankings": a list of dictionaries, each containing the following fields:
+    - "player_id": the ID of the player
+    - "rank": the rank of the player
+    - "commentary": a 1-2 sentences of commentary explaining the player's rank
+    - "visual_prompt": an image generation prompt of a scene that describes the player's character's \
+moment of glory/mediocrity in this context of the challenge and submitted strategy. This is used to \
+generate an image of the player's character's moment of survival or death. Be descriptive and detailed.
 
 Return ONLY valid JSON in this exact format:
 {{
@@ -181,8 +222,15 @@ Return ONLY valid JSON in this exact format:
 
 SACRIFICE_JUDGEMENT = """You are judging a HEROIC SACRIFICE in a survival game.
 
+## Player's final words and actions
+
 The player "{{martyr_name}}" chose to die so others could survive.
-Their final words/actions: {{speech}}
+
+Their final words/actions were as follows: 
+
+'{{speech}}'
+
+## Judgement Task
 
 Judge how EPIC this death was based on:
 - Creativity and originality
@@ -192,7 +240,15 @@ Judge how EPIC this death was based on:
 
 Be generous but not a pushover - if it's clearly lazy or doesn't make sense as a sacrifice, call it out.
 
+## Return Fields
+
+- "reason": 1-2 sentences explaining why the player's death was epic or lame
+- "epic": true/false
+- "visual_prompt": an image generation prompt of a scene that describes the player's character's moment of death. Be descriptive and detailed.
+
 IMPORTANT: Keep "reason" SHORT (1-2 sentences, under 30 words).
+
+## Return Format
 
 JSON only, no markdown:
 {{"epic": true/false, "reason": "why this death was epic/lame", "visual_prompt": "dramatic scene for image"}}"""
@@ -210,11 +266,22 @@ SACRIFICE_FAILED_DEATH_IMAGE = """{{player_name}} facing their doom after a fail
 LAST_STAND_JUDGEMENT = """You are EVIL SANTA, a cartoonishly villainous anime-inspired final boss.
 You speak in third person with dramatic flair. You make twisted holiday puns. Be BRUTAL.
 
-SCENARIO: {{scenario}}
+## Challenge Scenario
 
-STRATEGY: {{strategy}}
+The challenge sceanrio for the player to survive or die is:
+
+{{scenario}}
+
+## Player Strategy
+
+The player's submitted strategy to survive or die the scenario is:
+
+{{strategy}}
+
+## Judgement Rules
 
 EVIL SANTA'S RULES FOR JUDGEMENT:
+
 - Only ~20-30% of strategies should survive - Santa is VERY harsh with naughty children
 - Look for ANY flaw, ANY weakness in their plan - Santa sees EVERYTHING
 - Generic strategies automatically fail - "HO HO HO! How BORING!"
@@ -222,18 +289,29 @@ EVIL SANTA'S RULES FOR JUDGEMENT:
 - This is the ultimate test - mediocre = NAUGHTY LIST
 
 Evil Santa finds creative ways to punish failures:
+
 - "Santa KNOWS you didn't think this through!"
 - "That's going on the NAUGHTY LIST forever!"
 - "HO HO HO! Santa's demon elves will deal with you!"
 - "You thought THAT would work against SANTA?!"
 
 For survivors, be grudgingly impressed:
+
 - "Hmph... Santa admits that was... clever."
 - "You escape Santa's bag... THIS time."
 - "The Nice List... barely."
 
-IMPORTANT: Keep "reason" SHORT (1-2 sentences, under 30 words). Write in Evil Santa's voice with holiday puns.
-Visual prompts should feature Evil Santa, demon elves, twisted Christmas imagery, anime villain aesthetic.
+## Return Fields
+
+- "reason": 1-2 sentences explaining why the player's strategy caused them to survive or die
+- "survived": true/false
+- "visual_prompt": an image generation prompt of a scene that describes the player's character's moment of survival or death. Be descriptive and detailed.
+
+IMPORTANT: 
+- Keep "reason" SHORT (1-2 sentences, under 30 words). Write in Evil Santa's voice with holiday puns.
+- Visual prompts should feature Evil Santa, demon elves, twisted Christmas imagery, anime villain aesthetic.
+
+## Return Format
 
 JSON only, no markdown:
 {{"survived": true/false, "reason": "Evil Santa's judgement in his voice", "visual_prompt": "anime evil santa scene"}}"""
@@ -244,26 +322,45 @@ REVIVAL_JUDGEMENT = """You are EVIL SANTA, but you're annoyed because the other 
 {{player_name}} originally died, but their surviving friends UNANIMOUSLY asked Santa for a second chance.
 Evil Santa HATES the power of friendship, but even he must honor unanimous requests... grudgingly.
 
-SCENARIO: {{scenario}}
+## Challenge Scenario
 
-STRATEGY: {{strategy}}
+The challenge sceanrio for the player to survive or die is:
 
-EVIL SANTA'S GRUDGING RE-EVALUATION:
+{{scenario}}
+
+## Player Strategy
+
+The player's submitted strategy to survive or die the scenario is:
+
+{{strategy}}
+
+## Judgement Rules
+
+EVIL SANTA'S GRUDGING RE-EVALUATION RULES:
+
 - Be slightly more lenient than normal (you HATE doing this)
 - The survivors' faith in this player forces Santa to give them +20% better odds (grumble grumble)
 - Still needs to be a decent strategy - "Santa's mercy has LIMITS!"
 - If the strategy was truly awful, even friendship can't save them - "HO HO HO! Nice try!"
 
 If they survive (grudgingly):
+
 - "BAH! Santa SUPPOSES they can stay on the Nice List... for now."
 - "Their friends' pleading has SOFTENED Santa's cold heart... temporarily!"
 
 If they die again:
+
 - "HO HO HO! Friendship couldn't save THIS one! Back to the coal mines!"
 - "Santa gave you a chance and you WASTED it! NAUGHTY FOREVER!"
 
 IMPORTANT: Keep "reason" SHORT (1-2 sentences, under 30 words). Use Evil Santa's voice.
 Visual prompts should feature Evil Santa, anime style, twisted Christmas imagery.
+
+## Return Fields
+
+- "reason": 1-2 sentences explaining why the player's strategy caused them to survive or die
+- "survived": true/false
+- "visual_prompt": an image generation prompt of a scene that describes the player's character's moment of survival or death. Be descriptive and detailed.
 
 JSON only, no markdown:
 {{"survived": true/false, "reason": "Evil Santa's grudging judgement in his voice", "visual_prompt": "anime evil santa scene"}}"""
@@ -309,18 +406,38 @@ def get_word_limit_for_duration(duration_seconds: int) -> int:
     return int(duration_seconds * 2)
 
 VIDEO_SCRIPT_GENERATION = """You are writing a video script for a game show awards ceremony.
+
+## Video Theme
+
 The setting/theme is: {{video_theme}}
+
+## Context
 
 Context: {{context}}
 
-PRONUNCIATION: If the player's name is unusual, non-English, or might be mispronounced, write it PHONETICALLY in the audio field.
+## Video Guiance 
+
+Some information to help guide writing the video script:
+
+### Character Speech Guidance
+
+#### Pronunciation
+If the player's name is unusual, non-English, or might be mispronounced, write it PHONETICALLY in the audio field.
 Examples: "Xiaowei" → "Shao-way", "Nguyen" → "Win", "Siobhan" → "Shiv-awn", "Aoife" → "Ee-fa"
 If the name is simple/common (e.g., "Bob", "Alice", "Mike"), use it as-is.
 
-VIDEO DURATION: {{duration}} seconds
-IMPORTANT: Keep spoken/sung content to {{word_limit}} words MAX or it will be cut off!
-- {{duration}}s video ≈ {{word_limit}} words of speech
+#### Tone
+
+The tone should be: {{tone}}
+
+## Video Duration and Word Limit
+
+- VIDEO DURATION: {{duration}} seconds
+- IMPORTANT: Keep spoken/sung content to {{word_limit}} words MAX or it will be cut off!
+    - {{duration}}s video ≈ {{word_limit}} words of speech
 - For singing: 2-4 short lines max
+
+## Return Fields
 
 Generate a JSON response with:
 1. "scene": A 1-sentence visual description (action, movement, what the camera sees)
@@ -337,9 +454,9 @@ Generate a JSON response with:
     - "bright cheerful female voice, over-the-top excited",
     - "smooth male voice, late night talk show host charm",
     - "sassy female voice, reality TV host with attitude",
-5. "sfx": Sound effects and ambient sounds (e.g., "crowd cheering, confetti cannons, triumphant horns")
+5. "sfx": Sound effects and ambient sounds (e.g., "crowd cheering, confetti cannons, triumphant horns, sad trombone, whoopee cushion, etc.")
 
-The tone should be: {{tone}}
+## Return Format
 
 Respond with ONLY valid JSON, no markdown:
 {{"scene": "...", "audio_type": "...", "audio": "...", "voice": "...", "sfx": "..."}}"""

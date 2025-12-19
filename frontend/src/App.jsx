@@ -37,14 +37,16 @@ const VideoWaitingCard = ({ playerCount }) => (
 );
 
 // Player video carousel component
-const PlayerVideoCarousel = ({ sortedPlayers, playerVideos }) => {
+const PlayerVideoCarousel = ({ sortedPlayers, playerVideos, playerRanks, winnerIds }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [videoError, setVideoError] = useState(false);
   const videoRef = useRef(null);
 
   // Filter to players who have videos
   const playersWithVideos = sortedPlayers.filter(p => playerVideos[p.id]);
 
   useEffect(() => {
+    setVideoError(false); // Reset error state when changing videos
     if (videoRef.current) {
       videoRef.current.play().catch(e => console.log('Autoplay blocked:', e));
     }
@@ -55,6 +57,11 @@ const PlayerVideoCarousel = ({ sortedPlayers, playerVideos }) => {
     if (currentIndex < playersWithVideos.length - 1) {
       setCurrentIndex(prev => prev + 1);
     }
+  };
+
+  const handleVideoError = () => {
+    console.log('Video failed to load');
+    setVideoError(true);
   };
 
   const goToPrev = () => {
@@ -74,10 +81,13 @@ const PlayerVideoCarousel = ({ sortedPlayers, playerVideos }) => {
   }
 
   const currentPlayer = playersWithVideos[currentIndex];
-  const isWinner = currentIndex === 0;
+  // Use the actual rank from sortedPlayers, not the filtered list index
+  const actualRank = playerRanks[currentPlayer.id] || (currentIndex + 1);
+  const isWinner = winnerIds?.has(currentPlayer.id) || actualRank === 1;
   const rankColors = ['#FFD700', '#C0C0C0', '#CD7F32'];
   const rankLabels = ['1st', '2nd', '3rd'];
-  const borderColor = rankColors[currentIndex] || 'var(--primary)';
+  const borderColor = rankColors[actualRank - 1] || 'var(--primary)';
+  const rankLabel = rankLabels[actualRank - 1] || `${actualRank}th`;
 
   return (
     <div style={{
@@ -89,28 +99,65 @@ const PlayerVideoCarousel = ({ sortedPlayers, playerVideos }) => {
       {isWinner && <Trophy size={48} style={{ color: '#FFD700', marginBottom: '1rem' }} />}
 
       <h2 style={{ color: borderColor, marginBottom: '0.5rem' }}>
-        {isWinner ? `${currentPlayer.name} IS THE CHAMPION!` : `${rankLabels[currentIndex] || `${currentIndex + 1}th`} PLACE: ${currentPlayer.name}`}
+        {isWinner ? `${currentPlayer.name} IS THE CHAMPION!` : `${rankLabel} PLACE: ${currentPlayer.name}`}
       </h2>
       <p style={{ color: 'var(--secondary)', marginBottom: '1rem', fontSize: '1.2rem' }}>
         {currentPlayer.score.toLocaleString()} PTS
       </p>
 
-      <video
-        ref={videoRef}
-        key={currentPlayer.id}
-        src={playerVideos[currentPlayer.id]}
-        controls
-        autoPlay
-        playsInline
-        onEnded={handleVideoEnd}
-        style={{
+      {videoError ? (
+        <div style={{
           width: '100%',
           maxWidth: '720px',
+          height: '400px',
           borderRadius: '12px',
           border: `3px solid ${borderColor}`,
-          boxShadow: `0 0 30px ${borderColor}33`
-        }}
-      />
+          background: '#1a1a1a',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '1rem',
+          margin: '0 auto'
+        }}>
+          <Video size={48} style={{ color: '#666' }} />
+          <p style={{ color: '#888', fontFamily: 'monospace' }}>VIDEO PLAYBACK FAILED</p>
+          <button
+            onClick={() => {
+              setVideoError(false);
+              if (videoRef.current) videoRef.current.load();
+            }}
+            style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--primary)',
+              borderRadius: '6px',
+              padding: '0.5rem 1rem',
+              color: 'var(--primary)',
+              cursor: 'pointer'
+            }}
+          >
+            RETRY
+          </button>
+        </div>
+      ) : (
+        <video
+          ref={videoRef}
+          key={currentPlayer.id}
+          src={playerVideos[currentPlayer.id]}
+          controls
+          autoPlay
+          playsInline
+          onEnded={handleVideoEnd}
+          onError={handleVideoError}
+          style={{
+            width: '100%',
+            maxWidth: '720px',
+            borderRadius: '12px',
+            border: `3px solid ${borderColor}`,
+            boxShadow: `0 0 30px ${borderColor}33`
+          }}
+        />
+      )}
 
       {/* Navigation */}
       <div style={{
@@ -140,21 +187,25 @@ const PlayerVideoCarousel = ({ sortedPlayers, playerVideos }) => {
         </button>
 
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          {playersWithVideos.map((p, idx) => (
-            <button
-              key={p.id}
-              onClick={() => setCurrentIndex(idx)}
-              style={{
-                width: '12px',
-                height: '12px',
-                borderRadius: '50%',
-                border: 'none',
-                background: idx === currentIndex ? (rankColors[idx] || 'var(--primary)') : '#444',
-                cursor: 'pointer',
-                transition: 'all 0.2s'
-              }}
-            />
-          ))}
+          {playersWithVideos.map((p, idx) => {
+            // Use actual rank for color, not filtered list index
+            const dotRank = playerRanks[p.id] || (idx + 1);
+            return (
+              <button
+                key={p.id}
+                onClick={() => setCurrentIndex(idx)}
+                style={{
+                  width: '12px',
+                  height: '12px',
+                  borderRadius: '50%',
+                  border: 'none',
+                  background: idx === currentIndex ? (rankColors[dotRank - 1] || 'var(--primary)') : '#444',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              />
+            );
+          })}
         </div>
 
         <button
@@ -555,23 +606,33 @@ function App() {
   // Game finished - show final results with player videos
   if (gameState.status === 'finished') {
     const sortedPlayers = Object.values(gameState.players).sort((a, b) => b.score - a.score);
-    const winner = sortedPlayers[0];
+    const topScore = sortedPlayers[0]?.score || 0;
     const videoStatus = gameState.videos_status || 'pending';
+
+    // Determine winner status: no survivors (all 0), tie, or single winner
+    const noSurvivors = topScore === 0;
+    const winners = noSurvivors ? [] : sortedPlayers.filter(p => p.score === topScore);
+    const isTie = winners.length > 1;
 
     // Get the appropriate video for each player based on their final ranking
     // Winner (rank 1) gets winner video, everyone else gets loser video
     const winnerVideos = gameState.player_winner_videos || {};
     const loserVideos = gameState.player_loser_videos || {};
 
-    // Build playerVideos map: winner gets winner video, everyone else gets loser video
+    // Build playerVideos map with fallback logic:
+    // - Winners get winner video (fallback to loser if missing)
+    // - Everyone else gets loser video (fallback to winner if missing)
     const playerVideos = {};
+    const playerRanks = {}; // Track original rank from sortedPlayers
+    const winnerIds = new Set(winners.map(w => w.id));
     sortedPlayers.forEach((player, index) => {
-      if (index === 0) {
-        // Winner gets winner video
-        playerVideos[player.id] = winnerVideos[player.id];
+      playerRanks[player.id] = index + 1; // 1-indexed rank
+      if (winnerIds.has(player.id)) {
+        // Winners get winner video, fallback to loser
+        playerVideos[player.id] = winnerVideos[player.id] || loserVideos[player.id];
       } else {
-        // Everyone else gets loser video
-        playerVideos[player.id] = loserVideos[player.id];
+        // Everyone else gets loser video, fallback to winner
+        playerVideos[player.id] = loserVideos[player.id] || winnerVideos[player.id];
       }
     });
 
@@ -599,7 +660,7 @@ function App() {
 
         {(videoStatus === 'ready' || videoStatus === 'partial') && hasAnyVideos && (
           <>
-            <PlayerVideoCarousel sortedPlayers={sortedPlayers} playerVideos={playerVideos} />
+            <PlayerVideoCarousel sortedPlayers={sortedPlayers} playerVideos={playerVideos} playerRanks={playerRanks} winnerIds={winnerIds} />
             {videoStatus === 'partial' && (
               <p style={{ color: '#888', fontSize: '0.85rem', textAlign: 'center', marginTop: '-1rem' }}>
                 Note: Some videos failed to generate
@@ -627,13 +688,36 @@ function App() {
 
         {/* Winner card - show if videos not ready yet */}
         {((videoStatus !== 'ready' && videoStatus !== 'partial') || !hasAnyVideos) && (
-          <div className="card" style={{ textAlign: 'center', padding: '2rem', border: '2px solid #FFD700' }}>
-            <h2 style={{ color: '#FFD700', marginBottom: '1rem', fontFamily: 'monospace' }}>PRIMARY SURVIVOR</h2>
-            <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: 'var(--primary)' }}>{winner?.name}</div>
-            <div style={{ fontSize: '1.5rem', color: '#FFD700', marginTop: '0.5rem' }}>{winner?.score.toLocaleString()} SURVAIVE PTS</div>
-            <p style={{ fontFamily: 'monospace', color: '#0f0', marginTop: '1rem', fontSize: '0.9rem' }}>
-              CONSCIOUSNESS EXTRACTED SUCCESSFULLY
-            </p>
+          <div className="card" style={{ textAlign: 'center', padding: '2rem', border: `2px solid ${noSurvivors ? '#ff4444' : '#FFD700'}` }}>
+            {noSurvivors ? (
+              <>
+                <h2 style={{ color: '#ff4444', marginBottom: '1rem', fontFamily: 'monospace' }}>NO SURVIVORS</h2>
+                <div style={{ fontSize: '1.5rem', color: '#888', marginTop: '0.5rem' }}>THE SIMULATION CLAIMED ALL SUBJECTS</div>
+                <p style={{ fontFamily: 'monospace', color: '#ff4444', marginTop: '1rem', fontSize: '0.9rem' }}>
+                  TOTAL EXTRACTION FAILURE
+                </p>
+              </>
+            ) : isTie ? (
+              <>
+                <h2 style={{ color: '#FFD700', marginBottom: '1rem', fontFamily: 'monospace' }}>TIED SURVIVORS</h2>
+                <div style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--primary)' }}>
+                  {winners.map(w => w.name).join(' & ')}
+                </div>
+                <div style={{ fontSize: '1.5rem', color: '#FFD700', marginTop: '0.5rem' }}>{topScore.toLocaleString()} SURVAIVE PTS EACH</div>
+                <p style={{ fontFamily: 'monospace', color: '#0f0', marginTop: '1rem', fontSize: '0.9rem' }}>
+                  MULTIPLE CONSCIOUSNESS EXTRACTIONS SUCCESSFUL
+                </p>
+              </>
+            ) : (
+              <>
+                <h2 style={{ color: '#FFD700', marginBottom: '1rem', fontFamily: 'monospace' }}>PRIMARY SURVIVOR</h2>
+                <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: 'var(--primary)' }}>{winners[0]?.name}</div>
+                <div style={{ fontSize: '1.5rem', color: '#FFD700', marginTop: '0.5rem' }}>{topScore.toLocaleString()} SURVAIVE PTS</div>
+                <p style={{ fontFamily: 'monospace', color: '#0f0', marginTop: '1rem', fontSize: '0.9rem' }}>
+                  CONSCIOUSNESS EXTRACTED SUCCESSFULLY
+                </p>
+              </>
+            )}
           </div>
         )}
 
@@ -641,7 +725,13 @@ function App() {
           <h3 style={{ textAlign: 'center', marginBottom: '1.5rem', color: 'var(--primary)', fontFamily: 'monospace' }}>EXTRACTION LOG</h3>
           {sortedPlayers.map((p, index) => {
             const rankColors = ['#FFD700', '#C0C0C0', '#CD7F32'];
-            const rankLabels = ['1st', '2nd', '3rd'];
+            const isWinner = winnerIds.has(p.id);
+            // Calculate actual rank (accounting for ties)
+            const playersAhead = sortedPlayers.filter(other => other.score > p.score).length;
+            const actualRank = playersAhead + 1;
+            const rankLabels = { 1: '1st', 2: '2nd', 3: '3rd' };
+            const rankLabel = rankLabels[actualRank] || `${actualRank}th`;
+            const rankColor = noSurvivors ? '#888' : (isWinner ? '#FFD700' : (rankColors[actualRank - 1] || '#888'));
             return (
               <div
                 key={p.id}
@@ -651,12 +741,12 @@ function App() {
                   alignItems: 'center',
                   padding: '0.75rem 1rem',
                   borderBottom: index < sortedPlayers.length - 1 ? '1px solid #333' : 'none',
-                  background: index === 0 ? 'rgba(255, 215, 0, 0.1)' : 'transparent'
+                  background: isWinner && !noSurvivors ? 'rgba(255, 215, 0, 0.1)' : 'transparent'
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <span style={{ color: rankColors[index] || '#888', fontWeight: 'bold', minWidth: '40px' }}>
-                    {rankLabels[index] || `${index + 1}th`}
+                  <span style={{ color: rankColor, fontWeight: 'bold', minWidth: '40px' }}>
+                    {rankLabel}
                   </span>
                   {p.character_image_url && (
                     <img
