@@ -23,7 +23,7 @@ A multiplayer survival party game where players respond to AI-generated deadly s
 ### Game Flow
 
 Each round follows this pattern:
-1. **Scenario** - A deadly situation is presented with an AI-generated image
+1. **Scenario** - A deadly situation is presented 
 2. **Strategy** - All players submit their survival strategies (60 second timer)
 3. **Judgement** - The AI evaluates each strategy and determines outcomes
 4. **Results** - See who survived, who died, and why

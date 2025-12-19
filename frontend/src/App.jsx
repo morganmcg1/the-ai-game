@@ -714,7 +714,7 @@ function App() {
                 <div style={{ fontSize: '2.5rem', fontWeight: 'bold', color: 'var(--primary)' }}>{winners[0]?.name}</div>
                 <div style={{ fontSize: '1.5rem', color: '#FFD700', marginTop: '0.5rem' }}>{topScore.toLocaleString()} SURVAIVE PTS</div>
                 <p style={{ fontFamily: 'monospace', color: '#0f0', marginTop: '1rem', fontSize: '0.9rem' }}>
-                  CONSCIOUSNESS EXTRACTED SUCCESSFULLY
+                  THEIR THIRD EYE HAS BEEN OPENED
                 </p>
               </>
             )}
@@ -892,9 +892,9 @@ function App() {
       return (
         <div className="card" style={{ textAlign: 'center' }}>
           {header}
-          <h2 className="glitch-text">SYNC EVALUATION...</h2>
+          <h2 className="glitch-text">STRATEGY SYNC EVALUATION...</h2>
           <p style={{ fontFamily: 'monospace', color: 'var(--secondary)' }}>
-            ANALYZING COLLECTIVE PROTOCOL...
+            ANALYZING COLLECTIVE STRATEGY...
           </p>
           <span className="loader"></span>
         </div>

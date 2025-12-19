@@ -192,7 +192,9 @@ export function SacrificeSubmissionView({ round, playerId, players, onSubmit, co
                 }}>
                     Tips: Be creative! Dramatic speeches, heroic actions, or funny last words all count.
                     <br />
-                    If your death is judged EPIC: You get +500 pts and everyone else survives (+100 pts each).
+                    <br />
+                    If your death is judged EPIC: Everyone else survives.
+                    <br />
                     <br />
                     If your death is judged LAME: Everyone dies. No points for anyone.
                 </p>

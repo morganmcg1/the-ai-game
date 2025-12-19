@@ -29,14 +29,15 @@ rounds:
   # - cooperative: Team-based round with voting
   # - sacrifice: One player must die heroically
   # - last_stand: Brutal final boss round
-  # - ranked: Comparative ranking (everyone survives, points by rank)
+  # - ranked: Comparative ranking (only #1 survives, points by rank)
   config:
     - survival
     - survival
-    # - survival
+    - ranked
+    - ranked
     - cooperative
-    # - cooperative
-    # - cooperative
+    - cooperative
+    - cooperative
     - sacrifice
     - last_stand
 
@@ -78,8 +79,7 @@ models:
   revival_judgement: "moonshotai/kimi-k2-0905"
 
   # Video script generation - Creates personalized end-game video scripts
-  # Uses a faster/cheaper model since these are simpler prompts
-  video_script_generation: "mistralai/mistral-small-creative"
+  video_script_generation: "moonshotai/kimi-k2-0905" #"mistralai/mistral-small-creative"
 
 # =============================================================================
 # IMAGE GENERATION SETTINGS

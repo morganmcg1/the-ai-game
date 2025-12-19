@@ -347,14 +347,18 @@ def apply_style_theme(prompt: str, style_theme: str | None) -> str:
 
 
 def calculate_ranked_points(num_players: int, rank: int) -> int:
-    """Award points by rank position in ranked rounds."""
-    if num_players == 2:
-        return 200 if rank == 1 else 50
-    elif num_players == 3:
-        return [250, 125, 25][rank - 1]
-    else:  # 4+ players
-        points_map = {1: 300, 2: 200, 3: 100, 4: 50}
-        return points_map.get(rank, 25)
+    """Award points by rank position in ranked rounds. Only rank 1 survives and gets points."""
+    if rank == 1:
+        # Winner gets survival points - scales slightly with competition
+        if num_players >= 4:
+            return 300
+        elif num_players == 3:
+            return 250
+        else:  # 2 players
+            return 200
+    else:
+        # Everyone else dies with no points
+        return 0
 
 
 # --- Image & Model Definitions ---
@@ -764,6 +768,60 @@ def judge_strategy_llm(scenario: str, strategy: str):
         return prompts.FALLBACK_STRATEGY_JUDGEMENT
 
 
+async def repair_json_with_llm(malformed_json: str, player_name: str) -> dict | None:
+    """Use Kimi K2 to repair malformed JSON from video script generation."""
+    import httpx
+    import json
+    import re
+
+    repair_prompt = f"""Fix this malformed JSON. It has invalid control characters or syntax errors.
+Do not change the content/meaning, just fix the JSON syntax (escape special characters, fix quotes, etc).
+
+Malformed JSON:
+{malformed_json}
+
+IMPORTANT: Output ONLY the corrected valid JSON object. No explanation, no markdown, no code blocks - just the raw JSON."""
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{CONFIG['llm']['base_url']}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {os.environ['MOONSHOT_API_KEY']}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "moonshotai/kimi-k2-0905",
+                    "messages": [{"role": "user", "content": repair_prompt}]
+                }
+            )
+            response.raise_for_status()
+            data = response.json()
+            content = data["choices"][0]["message"]["content"]
+
+            json_match = re.search(r'\{[\s\S]*\}', content)
+            if json_match:
+                result = json.loads(json_match.group(0))
+                print(f"JSON REPAIR [{player_name}]: Successfully repaired JSON", flush=True)
+                return result
+    except Exception as e:
+        print(f"JSON REPAIR [{player_name}]: Repair failed: {e}", flush=True)
+
+    return None
+
+
+async def parse_json_with_repair(json_str: str, player_name: str) -> dict | None:
+    """Try to parse JSON, repair with LLM if invalid."""
+    import json
+
+    try:
+        return json.loads(json_str)
+    except json.JSONDecodeError as e:
+        print(f"JSON PARSE [{player_name}]: Invalid JSON, attempting repair: {e}", flush=True)
+
+    return await repair_json_with_llm(json_str, player_name)
+
+
 async def generate_video_prompt_llm_async(player_name: str, rank: int, total_players: int, score: int, video_theme: str):
     """Use a fast LLM to generate personalized video scene and dialogue with simulation narrative."""
     import httpx
@@ -804,9 +862,10 @@ async def generate_video_prompt_llm_async(player_name: str, rank: int, total_pla
             # Extract JSON
             json_match = re.search(r'\{[\s\S]*\}', content)
             if json_match:
-                result = json.loads(json_match.group(0))
-                print(f"VIDEO PROMPT LLM: Generated for {player_name}: {result}", flush=True)
-                return result
+                result = await parse_json_with_repair(json_match.group(0), player_name)
+                if result:
+                    print(f"VIDEO PROMPT LLM: Generated for {player_name}: {result}", flush=True)
+                    return result
 
     except Exception as e:
         print(f"VIDEO PROMPT LLM Error for {player_name}: {e}", flush=True)
@@ -866,9 +925,10 @@ async def generate_video_prompt_winner_async(player_name: str, video_theme: str)
 
             json_match = re.search(r'\{[\s\S]*\}', content)
             if json_match:
-                result = json.loads(json_match.group(0))
-                print(f"VIDEO WINNER PROMPT: Generated for {player_name} (audio_type: {result.get('audio_type', 'dialogue')})", flush=True)
-                return result
+                result = await parse_json_with_repair(json_match.group(0), player_name)
+                if result:
+                    print(f"VIDEO WINNER PROMPT: Generated for {player_name} (audio_type: {result.get('audio_type', 'dialogue')})", flush=True)
+                    return result
 
     except Exception as e:
         print(f"VIDEO WINNER PROMPT Error for {player_name}: {e}", flush=True)
@@ -916,9 +976,10 @@ async def generate_video_prompt_loser_async(player_name: str, video_theme: str):
 
             json_match = re.search(r'\{[\s\S]*\}', content)
             if json_match:
-                result = json.loads(json_match.group(0))
-                print(f"VIDEO LOSER PROMPT: Generated for {player_name} (audio_type: {result.get('audio_type', 'dialogue')})", flush=True)
-                return result
+                result = await parse_json_with_repair(json_match.group(0), player_name)
+                if result:
+                    print(f"VIDEO LOSER PROMPT: Generated for {player_name} (audio_type: {result.get('audio_type', 'dialogue')})", flush=True)
+                    return result
 
     except Exception as e:
         print(f"VIDEO LOSER PROMPT Error for {player_name}: {e}", flush=True)
@@ -992,13 +1053,20 @@ async def submit_video_request_async(player_name: str, image_url: str, script_da
 async def poll_video_status_async(player_name: str, request_id: str, client: "httpx.AsyncClient"):
     """Poll for video completion given a request_id."""
     import asyncio
+    import json
 
     if not request_id:
         return None
 
-    video_model_url = get_video_model_url()
-    status_url = f"{video_model_url}/requests/{request_id}/status"
-    result_url = f"{video_model_url}/requests/{request_id}"
+    # FAL queue API uses base model path for status/result (not full endpoint path)
+    # Submit: fal-ai/kling-video/v2.6/pro/image-to-video
+    # Status/Result: fal-ai/kling-video/requests/{request_id}/...
+    fal_queue_url = CONFIG["image_generation"]["fal_queue_url"]
+    full_model = CONFIG["video_generation"]["model"]
+    base_model = "/".join(full_model.split("/")[:2])  # "fal-ai/kling-video"
+
+    status_url = f"{fal_queue_url}/{base_model}/requests/{request_id}/status"
+    result_url = f"{fal_queue_url}/{base_model}/requests/{request_id}"
     headers = {
         "Authorization": f"Key {os.environ['FAL_KEY']}",
         "Content-Type": "application/json"
@@ -1013,6 +1081,13 @@ async def poll_video_status_async(player_name: str, request_id: str, client: "ht
 
         try:
             status_response = await client.get(status_url, headers=headers)
+
+            # Check HTTP status before parsing JSON
+            if status_response.status_code != 200:
+                if attempt % 6 == 0:
+                    print(f"VIDEO POLL [{player_name}]: HTTP {status_response.status_code} on attempt {attempt+1}", flush=True)
+                continue
+
             status_data = status_response.json()
             status = status_data.get("status")
 
@@ -1028,6 +1103,10 @@ async def poll_video_status_async(player_name: str, request_id: str, client: "ht
             elif status in ["FAILED", "CANCELLED"]:
                 print(f"VIDEO POLL [{player_name}]: Failed with status: {status}", flush=True)
                 return None
+        except json.JSONDecodeError as e:
+            # Log raw response for debugging JSON parsing issues
+            print(f"VIDEO POLL [{player_name}]: JSON error on attempt {attempt+1}: {e}", flush=True)
+            print(f"VIDEO POLL [{player_name}]: Response text: {status_response.text[:200]}", flush=True)
         except Exception as e:
             print(f"VIDEO POLL [{player_name}]: Error on attempt {attempt+1}: {e}", flush=True)
             # Continue polling on transient errors
@@ -1723,6 +1802,31 @@ async def api_get_game_state(request: Request):
                 needs_save = True
                 print(f"TIMEOUT: last_stand_revival timed out, no revival", flush=True)
 
+        # FALLBACK: Detect stuck judgement phase from early judgement race condition
+        # This handles the case where all judge_single_player tasks completed but
+        # none of them saw the full picture due to Modal Dict eventual consistency
+        elif current_round.status == "judgement" and current_round.type in ["survival", "blind_architect"]:
+            in_lobby_players = [p for p in game.players.values() if p.in_lobby]
+            # Check if all players who submitted have been judged (have death/survival reason)
+            all_judged = all(
+                (p.death_reason or p.survival_reason or not p.strategy)
+                for p in in_lobby_players
+            )
+            # Check no judgements are still pending
+            no_pending = not any(p.judgement_pending for p in game.players.values())
+
+            if all_judged and no_pending and in_lobby_players:
+                print(f"FALLBACK: Detected stuck judgement phase - all players judged but status not updated. Transitioning to results.", flush=True)
+                current_round.status = "results"
+                needs_save = True
+
+                # Trigger video pre-generation on round 1 results (if not already started)
+                if game.current_round_idx == 0 and game.videos_status == "pending":
+                    print("FALLBACK: Round 1 complete, triggering video pre-generation", flush=True)
+                    game.videos_status = "generating"
+                    game.videos_started_at = time.time()
+                    prewarm_player_videos.spawn(game.code)
+
     if needs_save:
         save_game(game)
 
@@ -1741,24 +1845,17 @@ def get_system_message(round_num: int, max_rounds: int, round_type: str) -> str:
     if round_type == "blind_architect":
         return "SECURITY BREACH DETECTED // ARCHITECT PROTOCOL ACTIVATED"
     elif round_type == "cooperative":
-        return "COLLABORATION REQUIRED"
+        return "COLLABORATION REQUIRED // EVERYONE'S SURVIVAL DEPENDS ON PICKING THE RIGHT STRATEGY"
     elif round_type == "sacrifice":
         return "CRITICAL FAILURE // ONE MUST FALL FOR OTHERS TO SURVIVE"
     elif round_type == "last_stand":
         return "HO HO HO // EVIL SANTA'S NIGHTMARE WORKSHOP // YOU'VE BEEN VERY NAUGHTY"
-    elif round_type == "ranked":
-        return "PERFORMANCE EVALUATION // SURVIVAL EFFICIENCY RANKING PROTOCOL"
-
-    # Standard survival rounds - progression-based messages
-    if round_num == 1:
+    elif round_type == "survival":
         return "FIGHT TO SURVIVE // MULTIPLE SURVIVORS POSSIBLE"
-    elif round_num == 2:
+    elif round_type == "ranked":
         return "FIGHT TO SURVIVE // ONLY ONE WINNER - EVERY PLAYER FOR THEMSELVES"
-    elif round_num == max_rounds:
-        return "FINAL LEVEL"
     else:
-        corruption_pct = min(90, 50 + (round_num * 10))
-        return f"WARNING: CORRUPTION AT {corruption_pct}% // REALITY UNSTABLE"
+        return "FIGHT!"
 
 
 @web_app.post("/api/start_game")
@@ -2399,8 +2496,16 @@ def run_ranked_judgement(game_code: str, expected_round_idx: int = -1):
                 points = calculate_ranked_points(num_players, rank)
                 current_round.ranked_points[pid] = points
                 game.players[pid].score += points
-                game.players[pid].survival_reason = commentary
-                game.players[pid].is_alive = True  # Everyone survives ranked rounds
+
+                # Only rank 1 survives - everyone else dies
+                if rank == 1:
+                    game.players[pid].is_alive = True
+                    game.players[pid].survival_reason = commentary
+                    game.players[pid].death_reason = None
+                else:
+                    game.players[pid].is_alive = False
+                    game.players[pid].death_reason = commentary
+                    game.players[pid].survival_reason = None
 
                 visual_prompts[pid] = vis_prompt
 
@@ -2445,13 +2550,24 @@ def run_ranked_judgement(game_code: str, expected_round_idx: int = -1):
 
         except Exception as e:
             print(f"RANKED_JUDGE: Error - {e}", flush=True)
-            # Fallback: give everyone participation points
-            for s in strategies:
+            import traceback
+            traceback.print_exc()
+            # Fallback: pick random winner, everyone else dies
+            import random
+            winner_idx = random.randint(0, len(strategies) - 1)
+            for i, s in enumerate(strategies):
                 pid = s["player_id"]
-                current_round.ranked_results[pid] = 1
-                current_round.ranked_points[pid] = 25
-                game.players[pid].score += 25
-                game.players[pid].is_alive = True
+                rank = 1 if i == winner_idx else i + 2
+                current_round.ranked_results[pid] = rank
+                points = calculate_ranked_points(len(strategies), rank)
+                current_round.ranked_points[pid] = points
+                game.players[pid].score += points
+                if i == winner_idx:
+                    game.players[pid].is_alive = True
+                    game.players[pid].survival_reason = "Randomly selected as winner due to judgement error"
+                else:
+                    game.players[pid].is_alive = False
+                    game.players[pid].death_reason = "Failed to rank higher (judgement error fallback)"
 
         # Transition to results
         current_round.status = "results"

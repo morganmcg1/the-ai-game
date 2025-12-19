@@ -168,11 +168,11 @@ RANKING CRITERIA (in order of importance):
 
 ## Important Rules
 
-- Everyone survives this round (it's about WHO survives BEST)
+- ONLY THE #1 RANKED PLAYER SURVIVES - everyone else dies
 - Rank from 1 (best) to {{num_strategies}} (worst)
-- No ties allowed - you must pick a winner
-- Give each player 1-2 sentences of commentary explaining their rank
-- Generate a visual_prompt for each player showing their moment of glory/mediocrity
+- No ties allowed - you must pick a single winner who lives
+- Give each player 1-2 sentences of commentary explaining their rank and fate
+- Generate a visual_prompt for each player: winner gets a triumph scene, losers get death scenes
 
 ## Return Format
 

@@ -78,12 +78,11 @@ A multiplayer survival party game where players respond to AI-generated deadly s
 
 ### Ranked Mode
 - All strategies are compared and ranked by the LLM judge
-- Everyone survives, but points awarded based on rank position
+- **Only the #1 ranked player survives** - everyone else dies
+- **Only the survivor gets points** - eliminated players get 0
 - Must wait for ALL submissions before judging (comparative evaluation)
 - Ranking criteria: creativity, effectiveness, entertainment value, specificity
-- **Scoring** (4+ players): 1st: 300, 2nd: 200, 3rd: 100, 4th: 50, 5th+: 25
-- **Scoring** (3 players): 1st: 250, 2nd: 125, 3rd: 25
-- **Scoring** (2 players): 1st: 200, 2nd: 50
+- **Scoring**: 1st place only: +300 (4+ players), +250 (3 players), +200 (2 players)
 - Images generated in parallel after ranking is determined
 
 ### Cooperative Mode
@@ -130,7 +129,7 @@ A multiplayer survival party game where players respond to AI-generated deadly s
 - **+100 points**: Saved by epic sacrifice (Sacrifice mode - survivors)
 - **Cooperative voting**: +200 (1st), +100 (2nd), 0 (middle), -100 (last)
 - **Cooperative team outcome**: +200 random bonus if survived, -100 all if failed
-- **Ranked mode** (4+ players): 1st: 300, 2nd: 200, 3rd: 100, 4th: 50, 5th+: 25
+- **Ranked mode**: Only #1 survives and gets points: +300 (4+), +250 (3), +200 (2 players)
 - Winner: Highest score after all rounds
 
 ### Round Configuration

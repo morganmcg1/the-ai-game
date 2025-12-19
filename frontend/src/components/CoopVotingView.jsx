@@ -101,7 +101,7 @@ export function CoopVotingView({ round, playerId, onVote, players }) {
             <div className="card" style={{ textAlign: 'center' }}>
                 <h2 className="glitch-text">RENDERING PROTOCOLS...</h2>
                 <p style={{ color: 'var(--secondary)', marginBottom: '2rem', fontFamily: 'monospace' }}>
-                    Generating visual representations of user protocols...
+                    Generating visual representations of user strategies...
                 </p>
                 <span className="loader"></span>
             </div>
@@ -114,7 +114,7 @@ export function CoopVotingView({ round, playerId, onVote, players }) {
                 SYNC PROTOCOL SELECTION
             </h1>
             <p style={{ textAlign: 'center', marginBottom: '2rem', color: '#ccc', fontFamily: 'monospace' }}>
-                Select the protocol most likely to preserve team integrity. Data points at stake.
+                Vote for the strategy image most likely to save the entire team of players. Everyone's survival depends on it.
             </p>
 
             {/* 2-column grid with centered last card for odd counts */}
@@ -220,7 +220,7 @@ export function CoopVotingView({ round, playerId, onVote, players }) {
 
             {currentVote && (
                 <p style={{ textAlign: 'center', marginTop: '1.5rem', color: 'var(--success)', fontFamily: 'monospace' }}>
-                    Vote registered. Click another protocol to change your vote.
+                    Vote registered. Click another strategy to change your vote.
                 </p>
             )}
         </div>

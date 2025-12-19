@@ -45,12 +45,25 @@ export function ResultsView({ round, players }) {
 
     // Get round outcome summary for survival-type rounds
     const getRoundSummary = () => {
-        // Skip for round types with their own summaries or no deaths
-        if (isSacrificeRound || isCooperativeRound || isRankedRound) return null;
+        // Skip for round types with their own summaries
+        if (isSacrificeRound || isCooperativeRound) return null;
 
         const alivePlayers = Object.values(players).filter(p => p.is_alive);
         const deadPlayers = Object.values(players).filter(p => !p.is_alive);
         const total = Object.keys(players).length;
+
+        if (isRankedRound) {
+            // For ranked rounds, show who survived
+            const survivor = alivePlayers[0];
+            if (survivor) {
+                return {
+                    text: `${survivor.name} ranked #1 and survived. ${deadPlayers.length} eliminated.`,
+                    color: 'var(--warning)'
+                };
+            } else {
+                return { text: "No one survived the rankings.", color: 'var(--danger)' };
+            }
+        }
 
         if (deadPlayers.length === total) {
             return { text: "Total wipeout. No survivors.", color: 'var(--danger)' };
@@ -118,15 +131,38 @@ export function ResultsView({ round, players }) {
                                 marginBottom: '1.5rem',
                                 textAlign: 'center',
                                 padding: '2rem',
-                                border: `2px solid ${round.coop_team_survived ? 'var(--success)' : 'var(--danger)'}`
+                                border: `2px solid ${round.coop_team_survived ? 'var(--success)' : 'var(--danger)'}`,
+                                maxWidth: round.coop_team_survived ? undefined : '600px',
+                                marginLeft: round.coop_team_survived ? undefined : 'auto',
+                                marginRight: round.coop_team_survived ? undefined : 'auto'
                             }}
                             initial={{ opacity: 0, scale: 0.9 }}
                             animate={{ opacity: 1, scale: 1 }}
                         >
                             <Users size={48} color={round.coop_team_survived ? 'var(--success)' : 'var(--danger)'} style={{ marginBottom: '1rem' }} />
                             <h2 style={{ color: round.coop_team_survived ? 'var(--success)' : 'var(--danger)', fontSize: '2rem', marginBottom: '1rem' }}>
-                                {round.coop_team_survived ? 'SYNC SUCCESSFUL' : 'SYNC FAILED'}
+                                {round.coop_team_survived ? 'STRATEGY SYNC SUCCESSFUL' : 'STRATEGY SYNC FAILED'}
                             </h2>
+
+                            {/* Show voted strategy and who submitted it */}
+                            {round.coop_winning_strategy_id && players[round.coop_winning_strategy_id] && (
+                                <div style={{ marginBottom: '1rem' }}>
+                                    <p style={{ color: '#888', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
+                                        Voted strategy by <strong style={{ color: 'var(--secondary)' }}>{players[round.coop_winning_strategy_id]?.name}</strong>:
+                                    </p>
+                                    <p style={{
+                                        color: '#fff',
+                                        padding: '0.75rem 1rem',
+                                        background: 'rgba(0, 0, 0, 0.4)',
+                                        borderRadius: '8px',
+                                        borderLeft: '3px solid var(--secondary)',
+                                        fontStyle: 'italic',
+                                        lineHeight: '1.4'
+                                    }}>
+                                        "{players[round.coop_winning_strategy_id]?.strategy || 'No strategy submitted'}"
+                                    </p>
+                                </div>
+                            )}
 
                             {/* Show judgement reason */}
                             {round.coop_team_reason && (
@@ -140,13 +176,6 @@ export function ResultsView({ round, players }) {
                                     borderLeft: `3px solid ${round.coop_team_survived ? 'var(--success)' : 'var(--danger)'}`
                                 }}>
                                     "{round.coop_team_reason}"
-                                </p>
-                            )}
-
-                            {/* Show winning strategy */}
-                            {round.coop_winning_strategy_id && players[round.coop_winning_strategy_id] && (
-                                <p style={{ color: '#ccc', marginBottom: '1rem' }}>
-                                    Winning strategy by: <strong style={{ color: 'var(--secondary)' }}>{players[round.coop_winning_strategy_id]?.name}</strong>
                                 </p>
                             )}
 
@@ -176,19 +205,155 @@ export function ResultsView({ round, players }) {
                                 </div>
                             )}
 
-                            {/* Team result image */}
-                            {round.scenario_image_url && (
+                            {/* Team result image - only show single image if team survived */}
+                            {round.coop_team_survived && round.scenario_image_url && (
                                 <div style={{ marginTop: '1.5rem', borderRadius: '8px', overflow: 'hidden' }}>
                                     <img src={round.scenario_image_url} alt="Team Result" style={{ width: '100%', maxWidth: '500px', height: 'auto', display: 'block', margin: '0 auto' }} />
                                 </div>
                             )}
                         </motion.div>
 
-                        {/* Vote Points Breakdown */}
-                        {Object.keys(round.coop_vote_points || {}).length > 0 && (
+                        {/* When team failed: Show all player cards with their strategies */}
+                        {!round.coop_team_survived && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.2 }}
+                            >
+                                {(() => {
+                                    const lobbyPlayers = sortedPlayers.filter(p => p.in_lobby !== false);
+                                    const playerCount = lobbyPlayers.length;
+                                    const isOdd = playerCount % 2 === 1;
+                                    const pairedPlayers = isOdd ? lobbyPlayers.slice(0, -1) : lobbyPlayers;
+                                    const lastPlayer = isOdd ? lobbyPlayers[lobbyPlayers.length - 1] : null;
+
+                                    const renderCoopFailCard = (player, index) => {
+                                        const strategyImage = round.strategy_images?.[player.id];
+                                        return (
+                                            <motion.div
+                                                key={player.id}
+                                                className="card"
+                                                style={{
+                                                    padding: '0',
+                                                    overflow: 'hidden',
+                                                    border: '2px solid var(--danger)',
+                                                }}
+                                                initial={{ opacity: 0, scale: 0.9 }}
+                                                animate={{ opacity: 1, scale: 1 }}
+                                                transition={{ delay: 0.3 + index * 0.05 }}
+                                            >
+                                                {/* Strategy image */}
+                                                {strategyImage ? (
+                                                    <div style={{ position: 'relative' }}>
+                                                        <img
+                                                            src={strategyImage}
+                                                            alt="Strategy"
+                                                            style={{ width: '100%', height: 'auto', display: 'block' }}
+                                                        />
+                                                        <div style={{
+                                                            position: 'absolute',
+                                                            top: '0.5rem',
+                                                            right: '0.5rem',
+                                                            background: 'var(--danger)',
+                                                            borderRadius: '50%',
+                                                            padding: '0.4rem',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center'
+                                                        }}>
+                                                            <Skull color="#000" size={16} />
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div style={{
+                                                        aspectRatio: '16/9',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        background: '#1a1a1a'
+                                                    }}>
+                                                        <Skull color="var(--danger)" size={32} />
+                                                    </div>
+                                                )}
+
+                                                {/* Info section */}
+                                                <div style={{ padding: '1rem' }}>
+                                                    <div style={{
+                                                        display: 'flex',
+                                                        justifyContent: 'space-between',
+                                                        alignItems: 'center',
+                                                        marginBottom: '0.5rem'
+                                                    }}>
+                                                        <span style={{
+                                                            fontWeight: 'bold',
+                                                            fontSize: '1.1rem',
+                                                            color: 'var(--danger)'
+                                                        }}>
+                                                            {player.name}
+                                                        </span>
+                                                        <span style={{
+                                                            color: 'var(--danger)',
+                                                            fontWeight: 'bold',
+                                                            fontSize: '1rem'
+                                                        }}>
+                                                            TERMINATED
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Player's strategy */}
+                                                    {player.strategy && (
+                                                        <div style={{
+                                                            fontSize: '0.85rem',
+                                                            color: '#ccc',
+                                                            lineHeight: '1.3',
+                                                            fontStyle: 'italic'
+                                                        }}>
+                                                            "{player.strategy}"
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </motion.div>
+                                        );
+                                    };
+
+                                    return (
+                                        <>
+                                            <div style={{
+                                                display: 'grid',
+                                                gridTemplateColumns: 'repeat(2, 1fr)',
+                                                gap: '1rem',
+                                            }}>
+                                                {pairedPlayers.map((player, index) => renderCoopFailCard(player, index))}
+                                            </div>
+
+                                            {lastPlayer && (
+                                                <div style={{
+                                                    display: 'flex',
+                                                    justifyContent: 'center',
+                                                    marginTop: '1rem'
+                                                }}>
+                                                    <div style={{ width: 'calc(50% - 0.5rem)' }}>
+                                                        {renderCoopFailCard(lastPlayer, lobbyPlayers.length - 1)}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </>
+                                    );
+                                })()}
+                            </motion.div>
+                        )}
+
+                        {/* Vote Points Breakdown - only show when team survived */}
+                        {round.coop_team_survived && Object.keys(round.coop_vote_points || {}).length > 0 && (
                             <motion.div
                                 className="card"
-                                style={{ padding: '1.5rem' }}
+                                style={{
+                                    padding: '1.5rem',
+                                    marginTop: '2rem',
+                                    maxWidth: '500px',
+                                    marginLeft: 'auto',
+                                    marginRight: 'auto'
+                                }}
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.2 }}
@@ -307,6 +472,8 @@ export function ResultsView({ round, players }) {
                                 const points = round.ranked_points?.[player.id] || 0;
                                 const commentary = round.ranked_commentary?.[player.id] || '';
                                 const rankStyle = getRankStyle(index);
+                                const isRankOneSurvivor = player.is_alive;
+                                const statusColor = isRankOneSurvivor ? 'var(--success)' : 'var(--danger)';
 
                                 return (
                                     <motion.div
@@ -315,7 +482,7 @@ export function ResultsView({ round, players }) {
                                         style={{
                                             padding: '0',
                                             overflow: 'hidden',
-                                            border: `2px solid ${rankStyle.color}`,
+                                            border: `2px solid ${statusColor}`,
                                         }}
                                         initial={{ opacity: 0, scale: 0.9 }}
                                         animate={{ opacity: 1, scale: 1 }}
@@ -329,11 +496,25 @@ export function ResultsView({ round, players }) {
                                                     alt="Result"
                                                     style={{ width: '100%', height: 'auto', display: 'block' }}
                                                 />
-                                                {/* Rank badge */}
+                                                {/* Survival status icon */}
                                                 <div style={{
                                                     position: 'absolute',
                                                     top: '0.5rem',
                                                     right: '0.5rem',
+                                                    background: statusColor,
+                                                    borderRadius: '50%',
+                                                    padding: '0.4rem',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center'
+                                                }}>
+                                                    {isRankOneSurvivor ? <Heart color="#000" size={16} /> : <Skull color="#000" size={16} />}
+                                                </div>
+                                                {/* Rank badge */}
+                                                <div style={{
+                                                    position: 'absolute',
+                                                    top: '0.5rem',
+                                                    left: '0.5rem',
                                                     background: rankStyle.color,
                                                     borderRadius: '8px',
                                                     padding: '0.4rem 0.8rem',
@@ -367,7 +548,7 @@ export function ResultsView({ round, players }) {
                                                 <span style={{
                                                     fontWeight: 'bold',
                                                     fontSize: '1.1rem',
-                                                    color: rankStyle.color
+                                                    color: statusColor
                                                 }}>
                                                     {player.name}
                                                 </span>
@@ -380,13 +561,16 @@ export function ResultsView({ round, players }) {
                                                 </span>
                                             </div>
 
-                                            {/* Commentary */}
+                                            {/* Status and Commentary */}
                                             <div style={{
                                                 fontSize: '0.85rem',
-                                                color: '#ccc',
+                                                color: statusColor,
                                                 lineHeight: '1.3',
                                                 fontStyle: 'italic'
                                             }}>
+                                                <span style={{ fontWeight: 'bold', fontStyle: 'normal' }}>
+                                                    {isRankOneSurvivor ? 'SURVIVED: ' : 'TERMINATED: '}
+                                                </span>
                                                 {commentary}
                                             </div>
                                         </div>
