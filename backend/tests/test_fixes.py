@@ -283,5 +283,66 @@ class TestFrontendApiErrorHandling:
                 assert False, f"Found raw fetch call in API: {line}"
 
 
+class TestUpdateGameWithRetry:
+    """Test the update_game_with_retry helper function."""
+    
+    def test_helper_function_exists(self):
+        """Verify update_game_with_retry helper exists."""
+        app_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'app.py')
+        with open(app_path, 'r') as f:
+            content = f.read()
+        
+        assert 'async def update_game_with_retry' in content, \
+            "update_game_with_retry helper should exist"
+    
+    def test_helper_has_retry_logic(self):
+        """Verify helper has retry logic with backoff."""
+        app_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'app.py')
+        with open(app_path, 'r') as f:
+            content = f.read()
+        
+        # Find the helper function
+        helper_start = content.find('async def update_game_with_retry')
+        helper_end = content.find('\n# ---', helper_start)
+        if helper_end == -1:
+            helper_end = content.find('\nfrom fastapi', helper_start)
+        helper_code = content[helper_start:helper_end]
+        
+        assert 'max_retries' in helper_code, "Helper should have max_retries parameter"
+        assert 'for attempt in range' in helper_code, "Helper should have retry loop"
+        assert 'asyncio.sleep' in helper_code, "Helper should have backoff sleep"
+        assert 'verify' in helper_code, "Helper should verify mutations"
+    
+    def test_submit_strategy_uses_helper(self):
+        """Verify submit_strategy uses update_game_with_retry."""
+        app_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'app.py')
+        with open(app_path, 'r') as f:
+            content = f.read()
+        
+        submit_strategy_idx = content.find('async def api_submit_strategy')
+        next_func_idx = content.find('@web_app', submit_strategy_idx + 1)
+        if next_func_idx == -1:
+            next_func_idx = len(content)
+        submit_strategy_code = content[submit_strategy_idx:next_func_idx]
+        
+        assert 'update_game_with_retry' in submit_strategy_code, \
+            "submit_strategy should use update_game_with_retry helper"
+    
+    def test_submit_trap_uses_helper(self):
+        """Verify submit_trap uses update_game_with_retry."""
+        app_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'app.py')
+        with open(app_path, 'r') as f:
+            content = f.read()
+        
+        submit_trap_idx = content.find('async def api_submit_trap')
+        next_func_idx = content.find('@web_app', submit_trap_idx + 1)
+        if next_func_idx == -1:
+            next_func_idx = len(content)
+        submit_trap_code = content[submit_trap_idx:next_func_idx]
+        
+        assert 'update_game_with_retry' in submit_trap_code, \
+            "submit_trap should use update_game_with_retry helper"
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

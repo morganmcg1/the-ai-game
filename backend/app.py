@@ -1146,6 +1146,73 @@ def get_game(code: str) -> Optional[GameState]:
 def save_game(game: GameState):
     games[game.code] = game.model_dump()
 
+
+async def update_game_with_retry(
+    code: str,
+    mutator,  # Callable[[GameState], Tuple[bool, Any]] - returns (should_save, result)
+    verify,   # Callable[[GameState], bool] - returns True if mutation was applied
+    max_retries: int = 10,
+    error_message: str = "Failed to update game due to concurrent modifications"
+):
+    """
+    Update game state with retry logic to handle concurrent modifications.
+    
+    This implements the retry-and-verify pattern to handle race conditions when
+    multiple players modify the game state simultaneously. The pattern:
+    1. Read game state
+    2. Apply mutation
+    3. Save game state
+    4. Re-read and verify the mutation was applied
+    5. If not, retry with exponential backoff
+    
+    Args:
+        code: Game code
+        mutator: Function that takes a GameState and returns (should_save, result).
+                 If should_save is False, returns early without saving (e.g., already done).
+                 Can raise HTTPException for validation errors.
+        verify: Function that takes a GameState and returns True if mutation was applied.
+        max_retries: Maximum number of retry attempts (default 10)
+        error_message: Error message if all retries fail
+    
+    Returns:
+        The result from the mutator function
+    
+    Raises:
+        HTTPException(404) if game not found
+        HTTPException(500) if all retries fail
+        Any HTTPException raised by the mutator
+    """
+    for attempt in range(max_retries):
+        game = get_game(code)
+        if not game:
+            raise HTTPException(status_code=404, detail="Game not found")
+        
+        # Apply mutation - may raise HTTPException for validation errors
+        should_save, result = mutator(game)
+        
+        if not should_save:
+            # Mutation determined no save needed (e.g., already applied)
+            return result
+        
+        save_game(game)
+        
+        # Wait before verification with jitter to reduce collision probability
+        jitter = random.uniform(0.05, 0.15)
+        await asyncio.sleep(0.1 + jitter)
+        
+        # Verify the mutation was applied
+        verification = get_game(code)
+        if verification and verify(verification):
+            return result
+        
+        # Retry with exponential backoff
+        print(f"UPDATE_GAME: Race condition detected, retry {attempt + 1}/{max_retries}", flush=True)
+        backoff = (0.15 * (2 ** attempt)) + random.uniform(0, 0.1)
+        await asyncio.sleep(min(backoff, 2.0))
+    
+    raise HTTPException(status_code=500, detail=error_message)
+
+
 # --- Core Game Logic & API ---
 
 from fastapi import FastAPI, HTTPException, Request
@@ -3077,162 +3144,176 @@ async def api_submit_strategy(request: Request):
         print("API: Submit Strategy ENTRY", flush=True)
         code = request.query_params.get("code")
         data = await request.json()
-        
-        # 1. First fetch to validate and save strategy
-        game = get_game(code)
         player_id = data.get("player_id")
         strategy = data.get("strategy", "")
         
-        if not game:
-             print("API: Game not found (submit)")
-             raise HTTPException(status_code=404, detail="Game not found")
         if not player_id:
-             raise HTTPException(status_code=400, detail="Missing player_id")
+            raise HTTPException(status_code=400, detail="Missing player_id")
         
         # Validate input length
         if len(strategy) > MAX_STRATEGY_LENGTH:
             raise HTTPException(status_code=400, detail=f"Strategy too long (max {MAX_STRATEGY_LENGTH} characters)")
         
-        current_round = game.rounds[game.current_round_idx]
-        if current_round.status != "strategy": 
-            print(f"API: Submit Strategy WRONG PHASE. Current: {current_round.status}", flush=True)
-            raise HTTPException(status_code=400, detail=f"Wrong phase: {current_round.status}")
-             
-        print(f"API: Submit Strategy for {player_id} in {code}")
-        if player_id in game.players:
+        # Track what side effects to trigger after successful save
+        side_effects = {"spawn_judgement": False, "round_type": None, "all_submitted": False, "alive_count": 0}
+        
+        def mutator(game: GameState):
+            current_round = game.rounds[game.current_round_idx]
+            if current_round.status != "strategy": 
+                print(f"API: Submit Strategy WRONG PHASE. Current: {current_round.status}", flush=True)
+                raise HTTPException(status_code=400, detail=f"Wrong phase: {current_round.status}")
+            
+            if player_id not in game.players:
+                print(f"API: Player {player_id} not found in game")
+                raise HTTPException(status_code=404, detail="Player not found")
+            
+            # Check if already submitted (idempotent)
+            if game.players[player_id].strategy == strategy:
+                print(f"API: Strategy already set for {player_id}")
+                return (False, {"status": "submitted"})
+            
+            print(f"API: Submit Strategy for {player_id} in {code}")
             game.players[player_id].strategy = strategy
-            game.players[player_id].last_active = time.time() # Update heartbeat
-            # DON'T save yet - we'll save after checking advancement to avoid race condition
-            print(f"API: Strategy set for {player_id}")
-        else:
-             print(f"API: Player {player_id} not found in game")
-             raise HTTPException(status_code=404, detail="Player not found")
-
-        # 2. Logic to check for advancement
-        # IMPORTANT: Do NOT re-fetch game here! Modal Dict has eventual consistency,
-        # so a re-fetch might not see the strategy we just set. Use the same game object.
-        # See CLAUDE.md "Known Issues" section for details.
-
-        # Get all alive players who are in the lobby
-        # NOTE: Don't filter by last_active - the round timeout handles inactive players
-        # by marking them dead. Filtering by heartbeat causes premature advancement.
-        alive_players = [p for p in game.players.values() if p.is_alive and p.in_lobby]
-
-        if not alive_players:
-            print("API: Warn - No alive players found. Forcing current.")
-            alive_players = [game.players[player_id]]
-
-        strategies_submitted = sum(1 for p in alive_players if p.strategy)
-        print(f"API: Strategies Submitted: {strategies_submitted} / {len(alive_players)}")
-
-        # For survival/blind_architect rounds, spawn early judgement immediately
-        # This reduces latency by judging players as they submit, not waiting for all
-        if current_round.type in ["survival", "blind_architect"]:
-            # Mark player as pending judgement and spawn early judge
-            game.players[player_id].judgement_pending = True
-
-            # If all players have submitted, transition to "judgement" phase (shows JUDGING... animation)
-            if strategies_submitted >= len(alive_players):
-                print("API: All strategies received. Showing JUDGEMENT phase.")
-                current_round.status = "judgement"
-
-            save_game(game)
+            game.players[player_id].last_active = time.time()
+            
+            # Get all alive players who are in the lobby
+            alive_players = [p for p in game.players.values() if p.is_alive and p.in_lobby]
+            if not alive_players:
+                print("API: Warn - No alive players found. Forcing current.")
+                alive_players = [game.players[player_id]]
+            
+            strategies_submitted = sum(1 for p in alive_players if p.strategy)
+            print(f"API: Strategies Submitted: {strategies_submitted} / {len(alive_players)}")
+            
+            side_effects["round_type"] = current_round.type
+            side_effects["alive_count"] = len(alive_players)
+            side_effects["all_submitted"] = strategies_submitted >= len(alive_players)
+            
+            # For survival/blind_architect rounds, spawn early judgement immediately
+            if current_round.type in ["survival", "blind_architect"]:
+                game.players[player_id].judgement_pending = True
+                side_effects["spawn_judgement"] = True
+                
+                if side_effects["all_submitted"]:
+                    print("API: All strategies received. Showing JUDGEMENT phase.")
+                    current_round.status = "judgement"
+            elif side_effects["all_submitted"]:
+                # Handle phase transitions for other round types
+                if current_round.type == "cooperative":
+                    if len(alive_players) <= 1:
+                        if alive_players:
+                            winner = alive_players[0]
+                            current_round.coop_winning_strategy_id = winner.id
+                            current_round.coop_vote_points[winner.id] = 200
+                            winner.score += 200
+                        current_round.status = "coop_judgement"
+                        print(f"API: Only {len(alive_players)} alive in coop, skipping voting")
+                    else:
+                        print("API: All strategies received. Advancing to COOP VOTING.")
+                        current_round.status = "coop_voting"
+                        current_round.vote_start_time = time.time()
+                elif current_round.type == "last_stand":
+                    print("API: All strategies received. Advancing to LAST STAND Judgement.")
+                    current_round.status = "judgement"
+                elif current_round.type == "sacrifice":
+                    print("API: All strategies received. Advancing to SACRIFICE VOLUNTEER.")
+                    current_round.status = "sacrifice_volunteer"
+                elif current_round.type == "ranked":
+                    print("API: All strategies received. Advancing to RANKED Judgement.")
+                    current_round.status = "ranked_judgement"
+                else:
+                    print("API: All strategies received. Advancing to Judgement.")
+                    current_round.status = "judgement"
+            else:
+                print("API: Waiting for others... Saving strategy.")
+            
+            return (True, {"status": "submitted"})
+        
+        def verify(game: GameState) -> bool:
+            return (player_id in game.players and 
+                    game.players[player_id].strategy == strategy)
+        
+        result = await update_game_with_retry(
+            code, mutator, verify,
+            error_message="Failed to submit strategy due to concurrent modifications"
+        )
+        
+        # Spawn side effects after successful save
+        if side_effects["spawn_judgement"]:
             print(f"API: Spawning EARLY JUDGEMENT for {player_id}")
             judge_single_player.spawn(code, player_id)
-            # The judge_single_player function will handle transitioning to results
-            # when all judgements are complete
-        elif strategies_submitted >= len(alive_players):
-            current_round = game.rounds[game.current_round_idx]
-
-            if current_round.type == "cooperative":
-                # Cooperative round: check if voting is needed
-                if len(alive_players) <= 1:
-                    # Only 1 alive player - skip voting (can't vote for self)
-                    if alive_players:
-                        winner = alive_players[0]
-                        current_round.coop_winning_strategy_id = winner.id
-                        current_round.coop_vote_points[winner.id] = 200
-                        winner.score += 200
-                    current_round.status = "coop_judgement"
-                    print(f"API: Only {len(alive_players)} alive in coop, skipping voting")
-                    save_game(game)
-                    generate_coop_strategy_images.spawn(code, game.current_round_idx)
-                    run_coop_judgement.spawn(code, game.current_round_idx)
-                else:
-                    # Multiple players - transition to image voting phase
-                    print("API: All strategies received. Advancing to COOP VOTING.")
-                    current_round.status = "coop_voting"
-                    current_round.vote_start_time = time.time()
-                    save_game(game)
-                    # Spawn async image generation for all strategies
-                    generate_coop_strategy_images.spawn(code, game.current_round_idx)
-            elif current_round.type == "last_stand":
-                # Last Stand: harsh judgement with potential revival phase
-                print("API: All strategies received. Advancing to LAST STAND Judgement.")
-                current_round.status = "judgement"
-                save_game(game)
-                # Trigger harsh async judgement
-                run_last_stand_judgement.spawn(code, game.current_round_idx)
-            elif current_round.type == "sacrifice":
-                # Sacrifice: go to volunteer phase
-                print("API: All strategies received. Advancing to SACRIFICE VOLUNTEER.")
-                current_round.status = "sacrifice_volunteer"
-                save_game(game)
-            elif current_round.type == "ranked":
-                # Ranked round: compare all strategies and rank them
-                print("API: All strategies received. Advancing to RANKED Judgement.")
-                current_round.status = "ranked_judgement"
-                save_game(game)
-                run_ranked_judgement.spawn(code, game.current_round_idx)
-            else:
-                # Fallback for any other round type
-                print("API: All strategies received. Advancing to Judgement.")
-                current_round.status = "judgement"
-                save_game(game)
-                run_round_judgement.spawn(code, game.current_round_idx)
-        else:
-            print("API: Waiting for others... Saving strategy.")
-            save_game(game)  # Save the strategy even if not advancing!
-
-        return {"status": "submitted"}
+        elif side_effects["all_submitted"]:
+            round_type = side_effects["round_type"]
+            if round_type == "cooperative":
+                generate_coop_strategy_images.spawn(code, get_game(code).current_round_idx)
+                if side_effects["alive_count"] <= 1:
+                    run_coop_judgement.spawn(code, get_game(code).current_round_idx)
+            elif round_type == "last_stand":
+                run_last_stand_judgement.spawn(code, get_game(code).current_round_idx)
+            elif round_type == "ranked":
+                run_ranked_judgement.spawn(code, get_game(code).current_round_idx)
+            elif round_type not in ["sacrifice"]:  # sacrifice doesn't spawn judgement here
+                run_round_judgement.spawn(code, get_game(code).current_round_idx)
+        
+        return result
     except HTTPException:
         raise
     except Exception as e:
         print(f"API: Submit Strategy EXCEPTION: {e}", flush=True)
-        # Return error JSON so frontend doesn't get 'null'
         return JSONResponse(status_code=500, content={"detail": f"Internal Error: {str(e)}"})
 
 @web_app.post("/api/submit_trap")
 async def api_submit_trap(request: Request):
     code = request.query_params.get("code")
     data = await request.json()
-    game = get_game(code)
     player_id = data.get("player_id")
     trap_text = data.get("trap_text", "")
     
-    if not game: 
-        raise HTTPException(status_code=404, detail="Game not found")
+    if not player_id:
+        raise HTTPException(status_code=400, detail="Missing player_id")
     
     # Validate input length
     if len(trap_text) > MAX_TRAP_TEXT_LENGTH:
         raise HTTPException(status_code=400, detail=f"Trap text too long (max {MAX_TRAP_TEXT_LENGTH} characters)")
-
+    
+    # Generate trap image first (before retry loop, as it's expensive)
+    # We need to get the style theme from the game
+    game = get_game(code)
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    
     current_round = game.rounds[game.current_round_idx]
-    current_round.trap_proposals[player_id] = trap_text
-
-    # Generate trap image with round's style theme (async to avoid blocking)
     themed_prompt = apply_style_theme(trap_text, current_round.style_theme)
     img_url = await generate_image_fal_async(themed_prompt, use_case="trap_image")
-    if img_url: 
-        current_round.trap_images[player_id] = img_url
+    
+    def mutator(game: GameState):
+        current_round = game.rounds[game.current_round_idx]
         
-    alive_players = [p for p in game.players.values() if p.is_alive and p.in_lobby]
-    if len(current_round.trap_proposals) >= len(alive_players):
-        current_round.status = "trap_voting"
-        current_round.vote_start_time = time.time()
-
-    save_game(game)
-    return {"status": "trap_submitted"}
+        # Check if already submitted (idempotent)
+        if player_id in current_round.trap_proposals and current_round.trap_proposals[player_id] == trap_text:
+            print(f"SUBMIT_TRAP: Trap already submitted for {player_id[:8]}...", flush=True)
+            return (False, {"status": "trap_submitted"})
+        
+        current_round.trap_proposals[player_id] = trap_text
+        if img_url:
+            current_round.trap_images[player_id] = img_url
+        
+        alive_players = [p for p in game.players.values() if p.is_alive and p.in_lobby]
+        if len(current_round.trap_proposals) >= len(alive_players):
+            current_round.status = "trap_voting"
+            current_round.vote_start_time = time.time()
+        
+        return (True, {"status": "trap_submitted"})
+    
+    def verify(game: GameState) -> bool:
+        current_round = game.rounds[game.current_round_idx]
+        return (player_id in current_round.trap_proposals and 
+                current_round.trap_proposals[player_id] == trap_text)
+    
+    return await update_game_with_retry(
+        code, mutator, verify,
+        error_message="Failed to submit trap due to concurrent modifications"
+    )
 
 @web_app.post("/api/vote_trap")
 async def api_vote_trap(request: Request):
