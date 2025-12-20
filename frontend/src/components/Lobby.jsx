@@ -185,8 +185,8 @@ export function Lobby({ onJoin, onAdmin, setPlayerId }) {
             if (pendingAction === 'create') {
                 const data = await api.createGame();
                 if (data.code) {
-                    // Join with the selected character's prompt AND the pre-generated image URL
-                    const joinData = await api.joinGame(data.code, name || "Admin", selected.prompt, selected.url);
+                    // Join with the selected character's prompt AND the pre-generated image URL and traits
+                    const joinData = await api.joinGame(data.code, name || "Admin", selected.prompt, selected.url, selected.traits);
                     if (joinData.error) throw new Error(joinData.error);
 
                     // Go directly to preview with the already-generated image and traits
@@ -200,8 +200,8 @@ export function Lobby({ onJoin, onAdmin, setPlayerId }) {
                     setMode('preview');
                 }
             } else {
-                // Join existing game with pre-generated image
-                const joinData = await api.joinGame(code, name, selected.prompt, selected.url);
+                // Join existing game with pre-generated image and traits
+                const joinData = await api.joinGame(code, name, selected.prompt, selected.url, selected.traits);
                 if (joinData.error) throw new Error(joinData.error);
 
                 setPreviewData({
@@ -255,7 +255,7 @@ export function Lobby({ onJoin, onAdmin, setPlayerId }) {
         try {
             const data = await api.createGame();
             if (data.code) {
-                const joinData = await api.joinGame(data.code, name || "Admin", characterPrompt || null);
+                const joinData = await api.joinGame(data.code, name || "Admin", characterPrompt || null, null, characterPrompt ? { ...characterFields } : null);
                 if (joinData.error) throw new Error(joinData.error);
 
                 // If no character description, skip preview and go straight to lobby
@@ -288,7 +288,7 @@ export function Lobby({ onJoin, onAdmin, setPlayerId }) {
         setIsJoining(true);
         setError('');
         try {
-            const joinData = await api.joinGame(code, name, characterPrompt || null);
+            const joinData = await api.joinGame(code, name, characterPrompt || null, null, characterPrompt ? { ...characterFields } : null);
             if (joinData.error) throw new Error(joinData.error);
 
             // If no character description, skip preview and go straight to lobby

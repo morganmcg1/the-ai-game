@@ -6,6 +6,7 @@ import { ResultsView } from './components/ResultsView';
 import { TrapView } from './components/TrapView';
 import { VotingView } from './components/VotingView';
 import { CoopVotingView } from './components/CoopVotingView';
+import { QuickfireView } from './components/QuickfireView';
 import { SacrificeVolunteerView } from './components/SacrificeVolunteerView';
 import { SacrificeVotingView } from './components/SacrificeVotingView';
 import { SacrificeSubmissionView } from './components/SacrificeSubmissionView';
@@ -25,9 +26,9 @@ const VideoWaitingCard = ({ playerCount }) => (
     margin: '0 auto'
   }}>
     <Video size={64} style={{ color: '#0f0', marginBottom: '1.5rem' }} />
-    <h2 style={{ color: '#0f0', marginBottom: '1rem', fontFamily: 'monospace' }}>EXTRACTING CONSCIOUSNESS DATA</h2>
+    <h2 style={{ color: '#0f0', marginBottom: '1rem', fontFamily: 'monospace' }}>CRAFTING THE PERFECT FAREWELL</h2>
     <p style={{ color: 'var(--secondary)', marginBottom: '1.5rem', fontFamily: 'monospace' }}>
-      Rendering extraction sequences for {playerCount} user{playerCount > 1 ? 's' : ''}...
+      Rendering for {playerCount} user{playerCount > 1 ? 's' : ''}...
     </p>
     <div className="loader" style={{ margin: '0 auto' }}></div>
     <p style={{ color: '#888', fontSize: '0.85rem', marginTop: '1.5rem', fontFamily: 'monospace' }}>
@@ -403,6 +404,13 @@ function App() {
     }
   };
 
+  // Quickfire round handler
+  const submitQuickfireChoice = async (choiceId) => {
+    if (gameCode && playerId) {
+      await api.submitQuickfireChoice(gameCode, playerId, choiceId);
+    }
+  };
+
   // Sacrifice round handlers
   const volunteerSacrifice = async () => {
     if (gameCode && playerId) {
@@ -650,7 +658,7 @@ function App() {
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2rem', padding: '2rem' }}>
         <h1 className="glitch-text" style={{ fontSize: '3rem', textAlign: 'center' }}>EXIT PROTOCOL COMPLETE</h1>
         <p style={{ fontFamily: 'monospace', color: '#0f0', textAlign: 'center', marginTop: '-1rem' }}>
-          SIMULATION TERMINATED // CONSCIOUSNESS EXTRACTION IN PROGRESS
+          SIMULATION TERMINATED // FAREWELL GIFTS IN PROGRESS
         </p>
 
         {/* Video section - show based on status */}
@@ -883,6 +891,22 @@ function App() {
             playerId={playerId}
             onVote={voteCoop}
             players={gameState.players}
+          />
+        </>
+      );
+    }
+
+    // Quickfire round - multiple choice
+    if (currentRound.status === 'quickfire_choice') {
+      return (
+        <>
+          {header}
+          <QuickfireView
+            round={currentRound}
+            playerId={playerId}
+            onSubmitChoice={submitQuickfireChoice}
+            players={gameState.players}
+            timeRemaining={timeRemaining}
           />
         </>
       );

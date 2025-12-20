@@ -1,5 +1,63 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { Sword, Sparkles, AlertTriangle } from 'lucide-react';
+
+// Helper to render character traits compactly
+const CharacterTraits = ({ traits }) => {
+    if (!traits) return null;
+    const { weapon, talent, flaw } = traits;
+    if (!weapon && !talent && !flaw) return null;
+
+    return (
+        <div style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '0.5rem',
+            marginTop: '0.5rem',
+            fontSize: '0.75rem'
+        }}>
+            {weapon && (
+                <span style={{
+                    background: 'rgba(255, 107, 107, 0.2)',
+                    color: '#ff6b6b',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '3px'
+                }}>
+                    <Sword size={10} /> {weapon}
+                </span>
+            )}
+            {talent && (
+                <span style={{
+                    background: 'rgba(72, 219, 251, 0.2)',
+                    color: '#48dbfb',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '3px'
+                }}>
+                    <Sparkles size={10} /> {talent}
+                </span>
+            )}
+            {flaw && (
+                <span style={{
+                    background: 'rgba(254, 202, 87, 0.2)',
+                    color: '#feca57',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '3px'
+                }}>
+                    <AlertTriangle size={10} /> {flaw}
+                </span>
+            )}
+        </div>
+    );
+};
 
 export function CoopVotingView({ round, playerId, onVote, players }) {
     const currentVote = round.coop_votes?.[playerId] || null;
@@ -36,8 +94,27 @@ export function CoopVotingView({ round, playerId, onVote, players }) {
         return (
             <div style={{ width: '100%', maxWidth: '1000px' }}>
                 <h1 style={{ textAlign: 'center', marginBottom: '1rem', color: 'var(--secondary)', fontFamily: 'monospace' }}>
-                    SYNC PROTOCOL SELECTION
+                    COLLABORATIVE ROUND: TEAM VOTE
                 </h1>
+
+                {/* Clear instructions box */}
+                <div style={{
+                    background: 'rgba(0, 240, 255, 0.1)',
+                    border: '1px solid rgba(0, 240, 255, 0.3)',
+                    borderRadius: '8px',
+                    padding: '1rem 1.5rem',
+                    marginBottom: '1.5rem'
+                }}>
+                    <p style={{ textAlign: 'center', color: '#fff', fontFamily: 'monospace', marginBottom: '0.75rem', fontSize: '1.1rem' }}>
+                        <strong>HOW THIS WORKS:</strong>
+                    </p>
+                    <ul style={{ color: '#ccc', fontFamily: 'monospace', margin: 0, paddingLeft: '1.5rem', lineHeight: '1.6' }}>
+                        <li><strong style={{ color: 'var(--primary)' }}>Vote for the best strategy</strong> — The most-voted strategy will be judged</li>
+                        <li><strong style={{ color: 'var(--success)' }}>If it succeeds:</strong> Everyone survives! Random player gets +200 bonus</li>
+                        <li><strong style={{ color: 'var(--danger)' }}>If it fails:</strong> Everyone dies and loses -100 points</li>
+                    </ul>
+                </div>
+
                 <p style={{ textAlign: 'center', marginBottom: '1rem', color: '#ff6b6b', fontFamily: 'monospace' }}>
                     Visual rendering failed. Vote based on strategy text.
                 </p>
@@ -63,12 +140,13 @@ export function CoopVotingView({ round, playerId, onVote, players }) {
                                     position: 'relative'
                                 }}
                             >
-                                <div style={{ fontWeight: 'bold', color: 'var(--accent)', marginBottom: '0.5rem' }}>
+                                <div style={{ fontWeight: 'bold', color: 'var(--accent)', marginBottom: '0.25rem' }}>
                                     {p.name}
                                     {isOwnStrategy && <span style={{ marginLeft: '0.5rem', color: '#888' }}>(YOUR STRATEGY)</span>}
                                     {isCurrentVote && <span style={{ marginLeft: '0.5rem', color: 'var(--success)' }}>(YOUR VOTE)</span>}
                                 </div>
-                                <div style={{ color: '#ccc', fontStyle: 'italic' }}>{p.strategy}</div>
+                                <CharacterTraits traits={p.character_traits} />
+                                <div style={{ color: '#ccc', fontStyle: 'italic', marginTop: '0.5rem' }}>{p.strategy}</div>
                                 {isVoting && (
                                     <div style={{
                                         position: 'absolute',
@@ -111,11 +189,30 @@ export function CoopVotingView({ round, playerId, onVote, players }) {
     return (
         <div style={{ width: '100%', maxWidth: '1000px' }}>
             <h1 style={{ textAlign: 'center', marginBottom: '1rem', color: 'var(--secondary)', fontFamily: 'monospace' }}>
-                SYNC PROTOCOL SELECTION
+                COLLABORATIVE ROUND: TEAM VOTE
             </h1>
-            <p style={{ textAlign: 'center', marginBottom: '2rem', color: '#ccc', fontFamily: 'monospace' }}>
-                Vote for the strategy image most likely to save the entire team of players. Everyone's survival depends on it.
-            </p>
+
+            {/* Clear instructions box */}
+            <div style={{
+                background: 'rgba(0, 240, 255, 0.1)',
+                border: '1px solid rgba(0, 240, 255, 0.3)',
+                borderRadius: '8px',
+                padding: '1rem 1.5rem',
+                marginBottom: '2rem'
+            }}>
+                <p style={{ textAlign: 'center', color: '#fff', fontFamily: 'monospace', marginBottom: '0.75rem', fontSize: '1.1rem' }}>
+                    <strong>HOW THIS WORKS:</strong>
+                </p>
+                <ul style={{ color: '#ccc', fontFamily: 'monospace', margin: 0, paddingLeft: '1.5rem', lineHeight: '1.6' }}>
+                    <li><strong style={{ color: 'var(--primary)' }}>Vote for the best strategy</strong> — The most-voted strategy will be judged</li>
+                    <li><strong style={{ color: 'var(--success)' }}>If it succeeds:</strong> Everyone survives! Random player gets +200 bonus</li>
+                    <li><strong style={{ color: 'var(--danger)' }}>If it fails:</strong> Everyone dies and loses -100 points</li>
+                    <li><strong style={{ color: '#ffd700' }}>Vote points:</strong> 1st: +200, 2nd: +100, Last: -100</li>
+                </ul>
+                <p style={{ textAlign: 'center', color: '#888', fontFamily: 'monospace', marginTop: '0.75rem', fontSize: '0.85rem' }}>
+                    You cannot vote for your own strategy
+                </p>
+            </div>
 
             {/* 2-column grid with centered last card for odd counts */}
             {(() => {
@@ -129,6 +226,7 @@ export function CoopVotingView({ round, playerId, onVote, players }) {
                     const isCurrentVote = currentVote === pid;
                     const isVoting = votingFor === pid;
                     const canClick = !isOwnStrategy && !isVoting && !isCurrentVote;
+                    const player = players[pid];
 
                     return (
                         <motion.div
@@ -141,7 +239,8 @@ export function CoopVotingView({ round, playerId, onVote, players }) {
                                 borderRadius: '12px',
                                 overflow: 'hidden',
                                 position: 'relative',
-                                opacity: isOwnStrategy ? 0.6 : 1
+                                opacity: isOwnStrategy ? 0.6 : 1,
+                                background: '#1a1a1a'
                             }}
                         >
                             <img src={url} alt="Strategy" style={{ width: '100%', display: 'block' }} />
@@ -185,6 +284,20 @@ export function CoopVotingView({ round, playerId, onVote, players }) {
                                     justifyContent: 'center'
                                 }}>
                                     <span className="spinner" style={{ width: '32px', height: '32px' }}></span>
+                                </div>
+                            )}
+                            {/* Player info section below image */}
+                            {player && (
+                                <div style={{ padding: '0.75rem', borderTop: '1px solid #333' }}>
+                                    <div style={{
+                                        fontWeight: 'bold',
+                                        color: 'var(--accent)',
+                                        fontSize: '0.9rem',
+                                        marginBottom: '0.25rem'
+                                    }}>
+                                        {player.name}
+                                    </div>
+                                    <CharacterTraits traits={player.character_traits} />
                                 </div>
                             )}
                         </motion.div>

@@ -21,6 +21,7 @@ def format_prompt(template: str, **kwargs) -> str:
 # SCENARIO GENERATION PROMPTS
 # =============================================================================
 
+
 SCENARIO_GENERATION = """Generate a deadly survival scenario for a party game. Level {{round_num}} of {{max_rounds}}.
 
 Create a SHORT scenario (2-3 sentences) with:
@@ -36,6 +37,13 @@ The scenario must give players something ACTIONABLE to respond to - they should 
 - Use an object or tool creatively
 - Make a clever observation or joke
 
+## BE CREATIVE, UNIQUE, AND ORIGINAL.
+
+Don't always just give the player a scenario where "You are in a X". Same for the setting, more variety than just \
+jungle temple, space station, haunted mansion, medieval dungeon etc etc. Lets be original and have some fun with it
+
+## Call to Action Examples
+
 CALL TO ACTION EXAMPLES (vary these - don't repeat the same one!):
 - "How will you escape?"
 - "What's your plan to survive?"
@@ -49,7 +57,7 @@ CALL TO ACTION EXAMPLES (vary these - don't repeat the same one!):
 - "What do you grab and why?"
 - "Fight, flee, or something weirder?"
 - "Sing, dance, or die trying?"
-- "How will you outsmart them?"
+- "How will you outsmart them?" 
 - "What's your survival strategy?"
 
 GOOD examples (clear threats, actionable, with call to action):
@@ -61,10 +69,51 @@ BAD examples (too vague, no clear action, no call to action):
 - "You're in a forest and shadows are purple and you're holding random objects" (no clear threat)
 - "Reality feels wrong and things keep shifting" (nothing to do)
 
+## Writing Guidelines
+
+### Second Person
+
 Write in second person ("You are...", "You find yourself...")
 ALWAYS end with a question that prompts the player to respond.
 
+### Clear language
+
+Write in clear, concise, and direct language. Avoid using vague, ambiguous, overly flowery or medieval language.
+
+## Generation insruction
+
 Generate ONLY the scenario, nothing else:"""
+
+
+QUICKFIRE_SCENARIO = """Generate a SHORT deadly survival scenario with EXACTLY 4 multiple choice options.
+
+Create a scenario (2-3 sentences MAX) with a clear threat, then provide 4 possible responses.
+EXACTLY 2 choices should lead to survival, EXACTLY 2 should lead to death.
+Choices should be concise (1 sentence each).
+
+The scenario should be:
+- Quick to read (this is a fast-paced round)
+- Have a clear threat requiring immediate action
+- Funny, creative, or absurd situations work great
+
+## Return Format
+
+Return ONLY valid JSON in this exact format:
+{{
+    "scenario": "Short scenario text (2-3 sentences)",
+    "choices": [
+        {{"id": "A", "text": "Choice text", "survives": true, "reason": "Why this works"}},
+        {{"id": "B", "text": "Choice text", "survives": false, "reason": "Why this fails"}},
+        {{"id": "C", "text": "Choice text", "survives": true, "reason": "Why this works"}},
+        {{"id": "D", "text": "Choice text", "survives": false, "reason": "Why this fails"}}
+    ]
+}}
+
+IMPORTANT:
+- Exactly 2 true and 2 false outcomes
+- Shuffle the correct/incorrect answers (don't always put correct ones first)
+- Reasons should be SHORT (under 15 words)
+- Make choices entertaining - include at least one funny/absurd option"""
 
 
 LAST_STAND_SCENARIO = """Generate a deadly survival scenario featuring an EVIL ANIME SANTA as the final boss.
@@ -111,11 +160,24 @@ The challenge sceanrio for the player to survive or die is:
 
 {{scenario}}
 
+## Player Info
+
+Player name: {{player_name}}
+{{character_info}}
+
 ## Player Strategy
 
 The player's submitted strategy to survive or die the scenario is:
 
 {{strategy}}
+
+## Character Trait Consideration
+
+If the player has character traits listed above, consider them when judging:
+- Weapon/equipment can be used creatively in their strategy
+- Hidden talents might give unexpected advantages
+- Fatal flaws could cause problems if exploited by the scenario
+- Reward strategies that cleverly use their traits!
 
 ## Judgement Rules
 
@@ -154,7 +216,8 @@ The challenge sceanrio for the players to rank is:
 
 ## Player Strategies
 
-The player's submitted strategies to rank are:
+Each player is identified by their PLAYER_ID. Use the EXACT player_id value in your response.
+Player entries may include CHARACTER TRAITS (weapon, talent, flaw) - consider these when ranking!
 
 {{strategy_list}}
 
@@ -163,8 +226,10 @@ The player's submitted strategies to rank are:
 RANKING CRITERIA (in order of importance):
 1. CREATIVITY - Original, unexpected approaches beat generic solutions
 2. EFFECTIVENESS - Would this actually work in the scenario?
-3. ENTERTAINMENT VALUE - Funny, dramatic, or memorable strategies rank higher
-4. SPECIFICITY - Detailed plans beat vague "I run away" responses
+3. TRAIT USAGE - Bonus for strategies that cleverly use character traits (weapon, talent)
+4. ENTERTAINMENT VALUE - Funny, dramatic, or memorable strategies rank higher
+5. SPECIFICITY - Detailed plans beat vague "I run away" responses
+6. FLAW AWARENESS - Strategies that ignore obvious fatal flaws may rank lower
 
 ## Important Rules
 
@@ -173,22 +238,21 @@ RANKING CRITERIA (in order of importance):
 - No ties allowed - you must pick a single winner who lives
 - Give each player 1-2 sentences of commentary explaining their rank and fate
 - Generate a visual_prompt for each player: winner gets a triumph scene, losers get death scenes
+- CRITICAL: Use the EXACT player_id from the input (the UUID after PLAYER_ID=)
 
 ## Return Format
 
 - "rankings": a list of dictionaries, each containing the following fields:
-    - "player_id": the ID of the player
-    - "rank": the rank of the player
-    - "commentary": a 1-2 sentences of commentary explaining the player's rank
-    - "visual_prompt": an image generation prompt of a scene that describes the player's character's \
-moment of glory/mediocrity in this context of the challenge and submitted strategy. This is used to \
-generate an image of the player's character's moment of survival or death. Be descriptive and detailed.
+    - "player_id": the EXACT player_id UUID from the input (e.g., "abc123-def456...")
+    - "rank": the rank of the player (1 = winner, higher = worse)
+    - "commentary": 1-2 sentences explaining the player's rank and fate
+    - "visual_prompt": an image generation prompt describing the player's moment of glory or death. Be descriptive and detailed.
 
 Return ONLY valid JSON in this exact format:
 {{
     "rankings": [
-        {{"player_id": "id1", "rank": 1, "commentary": "Brilliant use of...", "visual_prompt": "A hero triumphantly..."}},
-        {{"player_id": "id2", "rank": 2, "commentary": "Solid approach but...", "visual_prompt": "A person competently..."}}
+        {{"player_id": "exact-uuid-from-input", "rank": 1, "commentary": "Brilliant use of...", "visual_prompt": "A hero triumphantly..."}},
+        {{"player_id": "exact-uuid-from-input", "rank": 2, "commentary": "Solid approach but...", "visual_prompt": "A person dying..."}}
     ]
 }}"""
 
@@ -608,6 +672,16 @@ TIMEOUT_IMAGE_SUFFIX = ". Death by inaction, dramatic irony, dark humor, dramati
 # =============================================================================
 
 FALLBACK_SCENARIO = "ERROR: SCENARIO DATA CORRUPTED. You are suspended in static. Something moves in the noise."
+
+FALLBACK_QUICKFIRE_SCENARIO = {
+    "scenario": "A giant boulder is rolling toward you at high speed!",
+    "choices": [
+        {"id": "A", "text": "Dive to the side", "survives": True, "reason": "Classic move, always works"},
+        {"id": "B", "text": "Try to stop it with your hands", "survives": False, "reason": "You're not that strong"},
+        {"id": "C", "text": "Run in a zigzag pattern", "survives": True, "reason": "The boulder can't turn fast"},
+        {"id": "D", "text": "Accept your fate", "survives": False, "reason": "Defeatism never wins"}
+    ]
+}
 
 FALLBACK_LAST_STAND_SCENARIO = "Evil Santa's eyes glow crimson in his nightmare workshop. 'HO HO HO! SANTA SEES YOU WHEN YOU'RE SLEEPING!' Demon elves surround you as he loads razor-sharp candy canes into a massive cannon."
 

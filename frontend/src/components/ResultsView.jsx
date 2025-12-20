@@ -561,6 +561,25 @@ export function ResultsView({ round, players }) {
                                                 </span>
                                             </div>
 
+                                            {/* Player's strategy */}
+                                            {player.strategy && (
+                                                <div style={{
+                                                    fontSize: '0.85rem',
+                                                    color: '#ccc',
+                                                    lineHeight: '1.4',
+                                                    marginBottom: '0.75rem',
+                                                    padding: '0.5rem 0.75rem',
+                                                    background: 'rgba(0, 0, 0, 0.3)',
+                                                    borderRadius: '6px',
+                                                    borderLeft: '3px solid #666'
+                                                }}>
+                                                    <span style={{ color: '#888', fontWeight: 'bold', display: 'block', marginBottom: '0.25rem', fontSize: '0.75rem' }}>
+                                                        STRATEGY:
+                                                    </span>
+                                                    "{player.strategy}"
+                                                </div>
+                                            )}
+
                                             {/* Status and Commentary */}
                                             <div style={{
                                                 fontSize: '0.85rem',
@@ -757,6 +776,25 @@ export function ResultsView({ round, players }) {
                                                 {player.is_alive ? '+100' : '+0'}
                                             </span>
                                         </div>
+
+                                        {/* Player's strategy */}
+                                        {player.strategy && (
+                                            <div style={{
+                                                fontSize: '0.85rem',
+                                                color: '#ccc',
+                                                lineHeight: '1.4',
+                                                marginBottom: '0.75rem',
+                                                padding: '0.5rem 0.75rem',
+                                                background: 'rgba(0, 0, 0, 0.3)',
+                                                borderRadius: '6px',
+                                                borderLeft: '3px solid #666'
+                                            }}>
+                                                <span style={{ color: '#888', fontWeight: 'bold', display: 'block', marginBottom: '0.25rem', fontSize: '0.75rem' }}>
+                                                    STRATEGY:
+                                                </span>
+                                                "{player.strategy}"
+                                            </div>
+                                        )}
 
                                         {/* Judgement reason */}
                                         <div style={{

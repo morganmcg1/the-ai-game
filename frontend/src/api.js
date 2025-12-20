@@ -56,13 +56,16 @@ export const api = {
         });
     },
 
-    joinGame: async (code, name, characterDescription = null, characterImageUrl = null) => {
+    joinGame: async (code, name, characterDescription = null, characterImageUrl = null, characterTraits = null) => {
         const body = { name };
         if (characterDescription) {
             body.character_description = characterDescription;
         }
         if (characterImageUrl) {
             body.character_image_url = characterImageUrl;
+        }
+        if (characterTraits) {
+            body.character_traits = characterTraits;
         }
         return fetchJson(`${getUrl("join_game")}?code=${code}`, {
             method: "POST",
@@ -89,6 +92,14 @@ export const api = {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ player_id: playerId, strategy }),
+        });
+    },
+
+    submitQuickfireChoice: async (code, playerId, choiceId) => {
+        return fetchJson(`${getUrl("submit_quickfire_choice")}?code=${code}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ player_id: playerId, choice_id: choiceId }),
         });
     },
 

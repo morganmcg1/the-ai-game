@@ -369,7 +369,8 @@ image = modal.Image.debian_slim().pip_install(
     "openai",
     "fastapi[standard]",
     "httpx",  # For async HTTP requests
-    "pyyaml"  # For config loading
+    "pyyaml",  # For config loading
+    "weave>=0.52.22",  # For observability logging
 ).add_local_dir("frontend/dist", remote_path="/assets"
 ).add_local_file("config.yaml", remote_path="/config.yaml"
 ).add_local_file("backend/prompts.py", remote_path="/root/prompts.py")
@@ -397,6 +398,50 @@ def load_config():
 
 # Load config at module level for easy access
 CONFIG = load_config()
+
+# --- Weave Observability ---
+# Initialize Weave for LLM/image/video logging
+# Fail-safe: if Weave init fails, game continues without logging
+try:
+    import weave
+    from contextlib import nullcontext
+    weave.init("survaive")
+    WEAVE_ENABLED = True
+    print("Weave initialized successfully for project 'survaive'")
+except Exception as e:
+    WEAVE_ENABLED = False
+    weave = None  # type: ignore
+    from contextlib import nullcontext
+    print(f"Weave init failed (non-fatal): {e}")
+
+
+def weave_op(display_name: str):
+    """Decorator factory that wraps weave.op with fail-safe behavior.
+
+    If Weave is not enabled or fails, the original function is returned unchanged.
+    """
+    def decorator(func):
+        if not WEAVE_ENABLED or weave is None:
+            return func
+        try:
+            return weave.op(call_display_name=display_name)(func)
+        except Exception as e:
+            print(f"Weave op decoration failed for {display_name}: {e}")
+            return func
+    return decorator
+
+
+def get_weave_thread_context(thread_id: str | None):
+    """Get a weave.thread context manager or nullcontext if Weave disabled.
+
+    Use this in spawned Modal functions to re-establish thread context.
+    """
+    if WEAVE_ENABLED and weave is not None and thread_id:
+        try:
+            return weave.thread(thread_id)
+        except Exception as e:
+            print(f"Weave thread context failed: {e}")
+    return nullcontext()
 
 # Helper functions to access config values
 def get_model(use_case: str) -> str:
@@ -462,6 +507,7 @@ def generate_scenario_llm(round_num: int, max_rounds: int = 5):
         return prompts.FALLBACK_SCENARIO
 
 
+@weave_op("llm/last_stand_scenario")
 async def generate_last_stand_scenario_async():
     """Generate the EVIL SANTA final boss scenario."""
     import httpx
@@ -495,6 +541,7 @@ async def generate_last_stand_scenario_async():
         return prompts.FALLBACK_LAST_STAND_SCENARIO
 
 
+@weave_op("llm/generate_scenario")
 async def generate_scenario_llm_async(round_num: int, max_rounds: int = 5):
     """Async version of generate_scenario_llm for parallel pre-warming."""
     import httpx
@@ -532,15 +579,79 @@ async def generate_scenario_llm_async(round_num: int, max_rounds: int = 5):
         return prompts.FALLBACK_SCENARIO
 
 
-async def judge_strategy_llm_async(scenario: str, strategy: str):
+@weave_op("llm/quickfire_scenario")
+async def generate_quickfire_scenario_async():
+    """Generate a quickfire scenario with multiple choice options."""
+    import httpx
+    import json
+    import re
+
+    try:
+        print(f"QUICKFIRE SCENARIO: Calling LLM...", flush=True)
+        timeout = CONFIG["llm"]["default_timeout_seconds"]
+        async with httpx.AsyncClient(timeout=float(timeout)) as client:
+            response = await client.post(
+                f"{CONFIG['llm']['base_url']}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {os.environ['MOONSHOT_API_KEY']}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": get_model("scenario_generation"),
+                    "messages": [{"role": "user", "content": prompts.QUICKFIRE_SCENARIO}]
+                }
+            )
+            response.raise_for_status()
+            data = response.json()
+            content = data["choices"][0]["message"]["content"].strip()
+
+        # Extract JSON from response
+        json_match = re.search(r'\{[\s\S]*\}', content)
+        if json_match:
+            result = json.loads(json_match.group(0))
+            print(f"QUICKFIRE SCENARIO: Success - {result.get('scenario', '')[:50]}...", flush=True)
+            return result
+
+        print(f"QUICKFIRE SCENARIO: Failed to parse JSON, using fallback", flush=True)
+        return prompts.FALLBACK_QUICKFIRE_SCENARIO
+    except Exception as e:
+        import traceback
+        print(f"QUICKFIRE SCENARIO Error: {type(e).__name__}: {e}", flush=True)
+        print(f"QUICKFIRE SCENARIO Traceback: {traceback.format_exc()}", flush=True)
+        return prompts.FALLBACK_QUICKFIRE_SCENARIO
+
+
+def format_character_info(player_name: str, character_traits: dict | None) -> str:
+    """Format character traits for LLM prompt."""
+    if not character_traits:
+        return ""
+
+    parts = []
+    if character_traits.get("weapon"):
+        parts.append(f"Weapon: {character_traits['weapon']}")
+    if character_traits.get("talent"):
+        parts.append(f"Hidden Talent: {character_traits['talent']}")
+    if character_traits.get("flaw"):
+        parts.append(f"Fatal Flaw: {character_traits['flaw']}")
+
+    if parts:
+        return "Character Traits:\n- " + "\n- ".join(parts)
+    return ""
+
+
+@weave_op("llm/judge_strategy")
+async def judge_strategy_llm_async(scenario: str, strategy: str, player_name: str = "Player", character_traits: dict | None = None):
     """Async version of judge_strategy_llm for parallel execution with simulation flavor."""
     import re
     import httpx
 
+    character_info = format_character_info(player_name, character_traits)
     prompt = prompts.format_prompt(
         prompts.STRATEGY_JUDGEMENT,
         scenario=scenario,
-        strategy=strategy
+        strategy=strategy,
+        player_name=player_name,
+        character_info=character_info
     )
     try:
         print(f"LLM Judge: Calling API for strategy: {strategy[:50]}...", flush=True)
@@ -579,6 +690,7 @@ async def judge_strategy_llm_async(scenario: str, strategy: str):
         return prompts.FALLBACK_STRATEGY_JUDGEMENT
 
 
+@weave_op("llm/rank_strategies")
 async def rank_all_strategies_llm_async(scenario: str, strategies: list[dict]) -> str:
     """Rank all strategies comparatively for ranked rounds."""
     import re
@@ -586,11 +698,24 @@ async def rank_all_strategies_llm_async(scenario: str, strategies: list[dict]) -
     import json
     import random
 
-    # Build strategies list for prompt
-    strategy_list = "\n".join([
-        f"PLAYER {i+1} ({s['name']}): {s['strategy']}"
-        for i, s in enumerate(strategies)
-    ])
+    # Build strategies list for prompt - include player_id and character traits if available
+    def format_player_entry(s):
+        entry = f"PLAYER_ID={s['player_id']} ({s['name']})"
+        traits = s.get('character_traits')
+        if traits:
+            trait_parts = []
+            if traits.get('weapon'):
+                trait_parts.append(f"Weapon: {traits['weapon']}")
+            if traits.get('talent'):
+                trait_parts.append(f"Talent: {traits['talent']}")
+            if traits.get('flaw'):
+                trait_parts.append(f"Flaw: {traits['flaw']}")
+            if trait_parts:
+                entry += f" [Traits: {', '.join(trait_parts)}]"
+        entry += f": {s['strategy']}"
+        return entry
+
+    strategy_list = "\n".join([format_player_entry(s) for s in strategies])
 
     prompt = prompts.format_prompt(
         prompts.RANKED_JUDGEMENT,
@@ -734,14 +859,17 @@ async def generate_character_image_async(character_prompt: str, style_theme: str
 
 
 # Keep sync versions for backwards compatibility
-def judge_strategy_llm(scenario: str, strategy: str):
+def judge_strategy_llm(scenario: str, strategy: str, player_name: str = "Player", character_traits: dict | None = None):
     """Sync version of judgement with simulation flavor."""
     import re
     client = get_llm_client()
+    character_info = format_character_info(player_name, character_traits)
     prompt = prompts.format_prompt(
         prompts.STRATEGY_JUDGEMENT,
         scenario=scenario,
-        strategy=strategy
+        strategy=strategy,
+        player_name=player_name,
+        character_info=character_info
     )
     try:
         print(f"LLM Judge: Calling API for strategy: {strategy[:50]}...", flush=True)
@@ -768,6 +896,7 @@ def judge_strategy_llm(scenario: str, strategy: str):
         return prompts.FALLBACK_STRATEGY_JUDGEMENT
 
 
+@weave_op("llm/repair_json")
 async def repair_json_with_llm(malformed_json: str, player_name: str) -> dict | None:
     """Use Kimi K2 to repair malformed JSON from video script generation."""
     import httpx
@@ -822,6 +951,7 @@ async def parse_json_with_repair(json_str: str, player_name: str) -> dict | None
     return await repair_json_with_llm(json_str, player_name)
 
 
+@weave_op("llm/video_script")
 async def generate_video_prompt_llm_async(player_name: str, rank: int, total_players: int, score: int, video_theme: str):
     """Use a fast LLM to generate personalized video scene and dialogue with simulation narrative."""
     import httpx
@@ -1132,13 +1262,15 @@ class Player(BaseModel):
     # Character creation fields
     character_description: Optional[str] = None  # Combined prompt for image gen
     character_image_url: Optional[str] = None  # Generated character avatar
+    # Individual character traits (for display and AI consideration)
+    character_traits: Optional[dict] = None  # {look, weapon, talent, flaw, catchphrase}
 
 class Round(BaseModel):
     number: int
-    type: Literal["survival", "blind_architect", "cooperative", "sacrifice", "last_stand", "ranked"] = "survival"
+    type: Literal["survival", "blind_architect", "cooperative", "sacrifice", "last_stand", "ranked", "quickfire"] = "survival"
     scenario_text: str = ""
     scenario_image_url: Optional[str] = None
-    status: Literal["scenario", "strategy", "judgement", "results", "trap_creation", "trap_voting", "coop_voting", "coop_judgement", "sacrifice_volunteer", "sacrifice_voting", "sacrifice_submission", "sacrifice_judgement", "last_stand_revival", "revival_judgement", "ranked_judgement"] = "scenario"
+    status: Literal["scenario", "strategy", "judgement", "results", "trap_creation", "trap_voting", "coop_voting", "coop_judgement", "sacrifice_volunteer", "sacrifice_voting", "sacrifice_submission", "sacrifice_judgement", "last_stand_revival", "revival_judgement", "ranked_judgement", "quickfire_choice"] = "scenario"
     architect_id: Optional[str] = None # For blind architect
     style_theme: Optional[str] = None  # Visual style theme for all images in this round
     sector_name: Optional[str] = None  # Creative name for this level/sector (LLM-generated)
@@ -1182,6 +1314,10 @@ class Round(BaseModel):
     ranked_points: Dict[str, int] = {}       # player_id -> points awarded
     ranked_commentary: Dict[str, str] = {}   # player_id -> LLM commentary
 
+    # Quick Fire round specific - multiple choice survival
+    quickfire_choices: List[dict] = []       # List of {id, text, survives: bool, reason: str}
+    quickfire_player_choices: Dict[str, str] = {}  # player_id -> choice_id
+
     # Timer for submission phases (30 second limit)
     submission_start_time: Optional[float] = None  # When submission phase started
     vote_start_time: Optional[float] = None        # When voting phase started
@@ -1207,6 +1343,8 @@ class GameState(BaseModel):
     videos_started_at: Optional[float] = None  # Timestamp when video generation started (for stuck-job detection)
     video_theme: Optional[str] = None  # Consistent theme for all videos
     winner_id: Optional[str] = None
+    # Weave observability - thread ID for grouping all game operations
+    weave_thread_id: Optional[str] = None
 
 # --- Persistent Storage ---
 # We use a Dict to store game states. Key=GameCode
@@ -1359,7 +1497,18 @@ async def api_create_game(request: Request):
     data = await request.json()
     import shortuuid
     code = shortuuid.ShortUUID().random(length=4).upper()
-    game = GameState(id=str(uuid.uuid4()), code=code)
+
+    # Create Weave thread for grouping all game operations (fail-safe)
+    weave_thread_id = None
+    if WEAVE_ENABLED:
+        try:
+            with weave.thread() as ctx:
+                weave_thread_id = ctx.thread_id
+                print(f"API: Created Weave thread {weave_thread_id[:8]}... for game {code}", flush=True)
+        except Exception as e:
+            print(f"Weave thread creation failed (non-fatal): {e}", flush=True)
+
+    game = GameState(id=str(uuid.uuid4()), code=code, weave_thread_id=weave_thread_id)
     save_game(game)
 
     # Spawn background task to pre-warm ALL scenarios in parallel
@@ -1382,6 +1531,7 @@ async def api_join_game(request: Request):
     player_name = data.get("name", "Unknown Player")
     character_description = data.get("character_description")
     character_image_url = data.get("character_image_url")  # Pre-generated image (from random selection)
+    character_traits = data.get("character_traits")  # Individual traits dict {look, weapon, talent, flaw, catchphrase}
     
     # Validate input lengths
     if len(player_name) > MAX_NAME_LENGTH:
@@ -1417,7 +1567,8 @@ async def api_join_game(request: Request):
             name=player_name,
             is_admin=is_first,
             character_description=character_description,
-            character_image_url=character_image_url
+            character_image_url=character_image_url,
+            character_traits=character_traits
         )
         game.players[player_id] = player
         save_game(game)
@@ -1854,6 +2005,8 @@ def get_system_message(round_num: int, max_rounds: int, round_type: str) -> str:
         return "FIGHT TO SURVIVE // MULTIPLE SURVIVORS POSSIBLE"
     elif round_type == "ranked":
         return "FIGHT TO SURVIVE // ONLY ONE WINNER - EVERY PLAYER FOR THEMSELVES"
+    elif round_type == "quickfire":
+        return "QUICK FIRE ROUND // MAKE YOUR CHOICE FAST // NO TIME TO THINK"
     else:
         return "FIGHT!"
 
@@ -1910,6 +2063,14 @@ async def api_start_game(request: Request):
         first_round.status = "sacrifice_volunteer"
         first_round.scenario_text = "SACRIFICE PROTOCOL: One must fall for others to survive. Who will volunteer as tribute?"
         first_round.submission_start_time = time.time()  # Start timer for volunteer phase
+    elif first_round_type == "quickfire":
+        first_round.status = "quickfire_choice"
+        first_round.submission_start_time = time.time()
+        # Generate quickfire scenario with choices synchronously for first round
+        import asyncio
+        quickfire_data = asyncio.run(generate_quickfire_scenario_async())
+        first_round.scenario_text = quickfire_data.get("scenario", "Quick! Make your choice!")
+        first_round.quickfire_choices = quickfire_data.get("choices", [])
     else:
         # survival, cooperative, and last_stand start with strategy
         first_round.status = "strategy"
@@ -1917,7 +2078,19 @@ async def api_start_game(request: Request):
 
     game.rounds.append(first_round)
 
+    # Start video pre-generation immediately when game starts
+    # This gives maximum time for videos to generate while players play
+    if game.videos_status == "pending":
+        print(f"API: Starting video pre-generation for {code}", flush=True)
+        game.videos_status = "generating"
+        game.videos_started_at = time.time()
+
     save_game(game)
+
+    # Spawn video generation after save to ensure game state is persisted
+    if game.videos_status == "generating" and game.videos_started_at:
+        prewarm_player_videos.spawn(code)
+
     print(f"API: Game Saved (first round type: {first_round_type})")
     return {"status": "started", "scenario": first_round.scenario_text, "type": first_round_type}
 
@@ -2186,6 +2359,10 @@ def generate_character_image(game_code: str, player_id: str, character_prompt: s
 def prewarm_all_scenarios(game_code: str):
     """Pre-generate scenarios for ALL rounds in parallel when game is created."""
 
+    # Try to get thread ID early (game may not be ready due to eventual consistency)
+    game_for_thread = get_game(game_code)
+    thread_id = game_for_thread.weave_thread_id if game_for_thread else None
+
     async def do_prewarm():
         # Retry fetching game with backoff to handle eventual consistency
         max_fetch_retries = 10
@@ -2252,7 +2429,9 @@ def prewarm_all_scenarios(game_code: str):
         save_game(game)
         print(f"PREWARM: Complete! {len([s for s in scenarios if s])} scenarios saved", flush=True)
 
-    asyncio.run(do_prewarm())
+    # Run with Weave thread context
+    with get_weave_thread_context(thread_id):
+        asyncio.run(do_prewarm())
 
 
 async def generate_timeout_image_async(player_id: str, style_theme: str | None):
@@ -2273,11 +2452,15 @@ def run_round_judgement(game_code: str, expected_round_idx: int = -1):
     import json
     import asyncio
 
-    async def judge_and_generate(pid: str, player_name: str, strategy: str, scenario: str, style_theme: str | None):
+    # Get thread ID early for Weave context (fail-safe)
+    game_for_thread = get_game(game_code)
+    thread_id = game_for_thread.weave_thread_id if game_for_thread else None
+
+    async def judge_and_generate(pid: str, player_name: str, strategy: str, scenario: str, style_theme: str | None, character_traits: dict | None = None):
         """Judge a single player and generate their result image."""
         try:
-            # Judge the strategy
-            result_json = await judge_strategy_llm_async(scenario, strategy)
+            # Judge the strategy - include character traits for bonus/penalty consideration
+            result_json = await judge_strategy_llm_async(scenario, strategy, player_name, character_traits)
             print(f"JUDGEMENT: Got result for {player_name}: {result_json[:100]}...", flush=True)
             res = json.loads(result_json)
             survived = res.get("survived", False)
@@ -2336,7 +2519,7 @@ def run_round_judgement(game_code: str, expected_round_idx: int = -1):
                 continue
 
             if p.strategy and p.is_alive:
-                tasks.append(judge_and_generate(pid, p.name, p.strategy, current_round.scenario_text, current_round.style_theme))
+                tasks.append(judge_and_generate(pid, p.name, p.strategy, current_round.scenario_text, current_round.style_theme, p.character_traits))
                 player_info.append((pid, p.name))
 
         # Collect timeout image tasks for timed-out players
@@ -2426,8 +2609,9 @@ def run_round_judgement(game_code: str, expected_round_idx: int = -1):
 
         print(f"JUDGEMENT: Complete!", flush=True)
 
-    # Run the async function
-    asyncio.run(run_all_judgements())
+    # Run the async function with Weave thread context
+    with get_weave_thread_context(thread_id):
+        asyncio.run(run_all_judgements())
 
 
 @app.function(image=image, secrets=secrets)
@@ -2435,6 +2619,10 @@ def run_ranked_judgement(game_code: str, expected_round_idx: int = -1):
     """Run ranked judgement - compare all strategies and assign rankings."""
     import json
     import asyncio
+
+    # Get thread ID early for Weave context (fail-safe)
+    game_for_thread = get_game(game_code)
+    thread_id = game_for_thread.weave_thread_id if game_for_thread else None
 
     async def do_ranked_judgement():
         print(f"RANKED_JUDGE: Starting for game {game_code}", flush=True)
@@ -2451,18 +2639,47 @@ def run_ranked_judgement(game_code: str, expected_round_idx: int = -1):
 
         current_round = game.rounds[game.current_round_idx]
 
-        # Collect all alive players with strategies
+        # Collect all alive players with strategies - include character traits for bonus/penalty consideration
         strategies = []
         for pid, p in game.players.items():
             if p.is_alive and p.strategy:
                 strategies.append({
                     "player_id": pid,
                     "name": p.name,
-                    "strategy": p.strategy
+                    "strategy": p.strategy,
+                    "character_traits": p.character_traits
                 })
 
         if not strategies:
             print("RANKED_JUDGE: No strategies to judge!", flush=True)
+            # Still need to add timed-out players to results and generate their images
+            timeout_pids = list(current_round.timed_out_players.keys())
+            if timeout_pids:
+                # Generate timeout images for all timed-out players
+                timeout_tasks = [
+                    generate_timeout_image_async(pid, current_round.style_theme)
+                    for pid in timeout_pids if pid in game.players
+                ]
+                if timeout_tasks:
+                    print(f"RANKED_JUDGE: Generating {len(timeout_tasks)} timeout images for all timed-out players", flush=True)
+                    timeout_results = await asyncio.gather(*timeout_tasks)
+                    for pid, url in timeout_results:
+                        if url and pid in game.players:
+                            game.players[pid].result_image_url = url
+
+                # Add all timed-out players to ranked results
+                rank = 1
+                for pid in timeout_pids:
+                    if pid in game.players:
+                        current_round.ranked_results[pid] = rank
+                        current_round.ranked_commentary[pid] = "Timed out - failed to submit a survival strategy"
+                        current_round.ranked_points[pid] = 0
+                        game.players[pid].is_alive = False
+                        game.players[pid].death_reason = "Timed out - failed to submit a survival strategy"
+                        game.players[pid].survival_reason = None
+                        print(f"RANKED_JUDGE: Added timeout player {game.players[pid].name} as rank {rank}", flush=True)
+                        rank += 1
+
             current_round.status = "results"
             save_game(game)
             return
@@ -2482,11 +2699,34 @@ def run_ranked_judgement(game_code: str, expected_round_idx: int = -1):
             num_players = len(strategies)
             visual_prompts = {}
 
+            # Build lookup maps for fallback matching
+            name_to_pid = {s["name"].lower(): s["player_id"] for s in strategies}
+            valid_pids = {s["player_id"] for s in strategies}
+
             for r in rankings:
-                pid = r["player_id"]
-                rank = r["rank"]
+                raw_pid = r.get("player_id", "")
+                rank = r.get("rank", 99)
                 commentary = r.get("commentary", "No comment")
                 vis_prompt = r.get("visual_prompt", "A survival scene")
+
+                # Validate player_id - try to match if LLM returned invalid id
+                pid = raw_pid if raw_pid in valid_pids else None
+
+                # Fallback: try to match by name mentioned in player_id field
+                if not pid:
+                    for name, real_pid in name_to_pid.items():
+                        if name in raw_pid.lower() or raw_pid.lower() in name:
+                            pid = real_pid
+                            print(f"RANKED_JUDGE: Matched '{raw_pid}' to player {name} ({pid})", flush=True)
+                            break
+
+                if not pid:
+                    print(f"RANKED_JUDGE: WARNING - Could not match player_id '{raw_pid}', skipping", flush=True)
+                    continue
+
+                if pid not in game.players:
+                    print(f"RANKED_JUDGE: WARNING - Player {pid} not found in game, skipping", flush=True)
+                    continue
 
                 # Store in round data
                 current_round.ranked_results[pid] = rank
@@ -2510,6 +2750,25 @@ def run_ranked_judgement(game_code: str, expected_round_idx: int = -1):
                 visual_prompts[pid] = vis_prompt
 
                 print(f"RANKED_JUDGE: {game.players[pid].name} - Rank {rank}, +{points} pts", flush=True)
+
+            # Fallback: If no players were matched, assign rankings by strategy order
+            if not visual_prompts and strategies:
+                print("RANKED_JUDGE: No rankings matched! Using fallback ordering by strategy submission", flush=True)
+                for i, s in enumerate(strategies):
+                    pid = s["player_id"]
+                    rank = i + 1
+                    current_round.ranked_results[pid] = rank
+                    current_round.ranked_commentary[pid] = "Ranked by submission order (LLM response error)"
+                    points = calculate_ranked_points(num_players, rank)
+                    current_round.ranked_points[pid] = points
+                    game.players[pid].score += points
+                    if rank == 1:
+                        game.players[pid].is_alive = True
+                        game.players[pid].survival_reason = "Won by default"
+                    else:
+                        game.players[pid].is_alive = False
+                        game.players[pid].death_reason = "Lost in the rankings"
+                    visual_prompts[pid] = f"A person {'celebrating victory' if rank == 1 else 'meeting their demise'} in a survival scenario"
 
             # Generate images in parallel
             async def generate_player_image(pid: str, prompt: str):
@@ -2548,6 +2807,20 @@ def run_ranked_judgement(game_code: str, expected_round_idx: int = -1):
                     game.players[pid].result_image_url = url
                     print(f"RANKED_JUDGE: Saved timeout image for {game.players[pid].name}", flush=True)
 
+            # Add timed-out players to ranked results (so they appear in the UI)
+            # They get last place ranks after all submitted strategies
+            next_rank = len(strategies) + 1
+            for pid in timeout_pids:
+                if pid in game.players:
+                    current_round.ranked_results[pid] = next_rank
+                    current_round.ranked_commentary[pid] = "Timed out - failed to submit a survival strategy"
+                    current_round.ranked_points[pid] = 0
+                    game.players[pid].is_alive = False
+                    game.players[pid].death_reason = "Timed out - failed to submit a survival strategy"
+                    game.players[pid].survival_reason = None
+                    print(f"RANKED_JUDGE: Added timeout player {game.players[pid].name} as rank {next_rank}", flush=True)
+                    next_rank += 1
+
         except Exception as e:
             print(f"RANKED_JUDGE: Error - {e}", flush=True)
             import traceback
@@ -2569,6 +2842,18 @@ def run_ranked_judgement(game_code: str, expected_round_idx: int = -1):
                     game.players[pid].is_alive = False
                     game.players[pid].death_reason = "Failed to rank higher (judgement error fallback)"
 
+            # Also add timed-out players in error fallback
+            next_rank = len(strategies) + 1
+            for pid in current_round.timed_out_players.keys():
+                if pid in game.players:
+                    current_round.ranked_results[pid] = next_rank
+                    current_round.ranked_commentary[pid] = "Timed out - failed to submit a survival strategy"
+                    current_round.ranked_points[pid] = 0
+                    game.players[pid].is_alive = False
+                    game.players[pid].death_reason = "Timed out - failed to submit a survival strategy"
+                    game.players[pid].survival_reason = None
+                    next_rank += 1
+
         # Transition to results
         current_round.status = "results"
         save_game(game)
@@ -2579,7 +2864,9 @@ def run_ranked_judgement(game_code: str, expected_round_idx: int = -1):
 
         print("RANKED_JUDGE: Complete!", flush=True)
 
-    asyncio.run(do_ranked_judgement())
+    # Run with Weave thread context
+    with get_weave_thread_context(thread_id):
+        asyncio.run(do_ranked_judgement())
 
 
 @app.function(image=image, secrets=secrets)
@@ -2587,6 +2874,10 @@ def judge_single_player(game_code: str, player_id: str):
     """Judge a single player immediately when they submit strategy (early judgement for latency reduction)."""
     import json
     import asyncio
+
+    # Get thread ID early for Weave context
+    game_for_thread = get_game(game_code)
+    thread_id = game_for_thread.weave_thread_id if game_for_thread else None
 
     async def do_judge():
         print(f"EARLY_JUDGE: Starting for player {player_id} in game {game_code}", flush=True)
@@ -2611,8 +2902,8 @@ def judge_single_player(game_code: str, player_id: str):
             return
 
         try:
-            # Judge the strategy
-            result_json = await judge_strategy_llm_async(current_round.scenario_text, player.strategy)
+            # Judge the strategy - include character traits for bonus/penalty consideration
+            result_json = await judge_strategy_llm_async(current_round.scenario_text, player.strategy, player.name, player.character_traits)
             print(f"EARLY_JUDGE: Got result for {player.name}: {result_json[:100]}...", flush=True)
             res = json.loads(result_json)
             survived = res.get("survived", False)
@@ -2690,7 +2981,9 @@ def judge_single_player(game_code: str, player_id: str):
         save_game(game)
         print(f"EARLY_JUDGE: Complete for {player.name}!", flush=True)
 
-    asyncio.run(do_judge())
+    # Run with Weave thread context
+    with get_weave_thread_context(thread_id):
+        asyncio.run(do_judge())
 
 
 # Keep old function name as alias for backwards compatibility
@@ -2702,6 +2995,10 @@ def generate_all_player_videos(game_code: str):
     """Generate personalized 10-second videos for ALL players using parallel phases."""
     import asyncio
     import httpx
+
+    # Get thread ID early for Weave context
+    game_for_thread = get_game(game_code)
+    thread_id = game_for_thread.weave_thread_id if game_for_thread else None
 
     async def do_all_video_generation():
         game = get_game(game_code)
@@ -2873,7 +3170,9 @@ def generate_all_player_videos(game_code: str):
 
             save_game(game)
 
-    asyncio.run(do_all_video_generation())
+    # Run with Weave thread context
+    with get_weave_thread_context(thread_id):
+        asyncio.run(do_all_video_generation())
 
 
 # Keep old function name as alias for backwards compatibility
@@ -2884,12 +3183,16 @@ generate_winner_video = generate_all_player_videos
 def prewarm_player_videos(game_code: str):
     """Pre-generate winner AND loser videos for ALL players using their avatars.
 
-    Called when round 1 results are shown.
+    Called when game starts (admin clicks START GAME) to maximize generation time.
     Generates 2 videos per player (winner + loser) so the correct one can be
     selected instantly at game end.
     """
     import asyncio
     import httpx
+
+    # Get thread ID early for Weave context
+    game_for_thread = get_game(game_code)
+    thread_id = game_for_thread.weave_thread_id if game_for_thread else None
 
     async def do_prewarm_videos():
         game = get_game(game_code)
@@ -3103,7 +3406,9 @@ def prewarm_player_videos(game_code: str):
 
     # Wrap in try/except to ensure we mark as failed if any unexpected error occurs
     try:
-        asyncio.run(do_prewarm_videos())
+        # Run with Weave thread context
+        with get_weave_thread_context(thread_id):
+            asyncio.run(do_prewarm_videos())
     except Exception as e:
         print(f"PREWARM VIDEO: FATAL ERROR - {e}", flush=True)
         # Try to mark as failed so retry is possible
@@ -3255,6 +3560,10 @@ def run_coop_judgement(game_code: str, expected_round_idx: int = -1):
     import json
     import asyncio
 
+    # Get thread ID early for Weave context
+    game_for_thread = get_game(game_code)
+    thread_id = game_for_thread.weave_thread_id if game_for_thread else None
+
     async def do_judgement():
         game = get_game(game_code)
         if not game:
@@ -3274,12 +3583,13 @@ def run_coop_judgement(game_code: str, expected_round_idx: int = -1):
             save_game(game)
             return
 
-        winning_strategy = game.players[winning_pid].strategy
+        winning_player = game.players[winning_pid]
+        winning_strategy = winning_player.strategy
         print(f"COOP JUDGE: Judging strategy: {winning_strategy[:100]}...", flush=True)
 
         try:
-            # Judge the winning strategy
-            result_json = await judge_strategy_llm_async(current_round.scenario_text, winning_strategy)
+            # Judge the winning strategy - include character traits for bonus/penalty consideration
+            result_json = await judge_strategy_llm_async(current_round.scenario_text, winning_strategy, winning_player.name, winning_player.character_traits)
             print(f"COOP JUDGE: Result: {result_json[:200]}...", flush=True)
             res = json.loads(result_json)
             team_survived = res.get("survived", False)
@@ -3325,7 +3635,9 @@ def run_coop_judgement(game_code: str, expected_round_idx: int = -1):
 
         print("COOP JUDGE: Complete!", flush=True)
 
-    asyncio.run(do_judgement())
+    # Run with Weave thread context
+    with get_weave_thread_context(thread_id):
+        asyncio.run(do_judgement())
 
 
 @web_app.post("/api/submit_strategy")
@@ -3451,6 +3763,80 @@ async def api_submit_strategy(request: Request):
     except Exception as e:
         print(f"API: Submit Strategy EXCEPTION: {e}", flush=True)
         return JSONResponse(status_code=500, content={"detail": f"Internal Error: {str(e)}"})
+
+@web_app.post("/api/submit_quickfire_choice")
+async def api_submit_quickfire_choice(request: Request):
+    """Submit a choice in a quickfire round."""
+    code = request.query_params.get("code")
+    data = await request.json()
+    player_id = data.get("player_id")
+    choice_id = data.get("choice_id")  # e.g., "A", "B", "C", "D"
+
+    if not player_id or not choice_id:
+        raise HTTPException(status_code=400, detail="Missing player_id or choice_id")
+
+    def mutator(game: GameState):
+        if game.status != "playing":
+            raise HTTPException(status_code=400, detail="Game not playing")
+
+        current_round = game.rounds[game.current_round_idx]
+        if current_round.type != "quickfire" or current_round.status != "quickfire_choice":
+            raise HTTPException(status_code=400, detail=f"Wrong round type/status")
+
+        if player_id not in game.players:
+            raise HTTPException(status_code=404, detail="Player not found")
+
+        player = game.players[player_id]
+        if not player.is_alive:
+            raise HTTPException(status_code=400, detail="Dead players cannot choose")
+
+        # Validate choice exists
+        valid_choices = [c["id"] for c in current_round.quickfire_choices]
+        if choice_id not in valid_choices:
+            raise HTTPException(status_code=400, detail=f"Invalid choice: {choice_id}")
+
+        # Check if already chosen (idempotent)
+        if current_round.quickfire_player_choices.get(player_id) == choice_id:
+            return (False, {"status": "submitted"})
+
+        # Record choice
+        current_round.quickfire_player_choices[player_id] = choice_id
+        player.last_active = time.time()
+
+        # Check if all alive players have chosen
+        alive_players = [p for p in game.players.values() if p.is_alive and p.in_lobby]
+        all_chosen = all(
+            p.id in current_round.quickfire_player_choices
+            for p in alive_players
+        )
+
+        if all_chosen:
+            # Process results immediately - no LLM needed, choices have predetermined outcomes
+            for pid, cid in current_round.quickfire_player_choices.items():
+                p = game.players[pid]
+                # Find the choice and apply result
+                choice_data = next((c for c in current_round.quickfire_choices if c["id"] == cid), None)
+                if choice_data:
+                    if choice_data.get("survives", False):
+                        p.is_alive = True
+                        p.survival_reason = choice_data.get("reason", "Survived!")
+                        p.death_reason = None
+                        p.score += 100
+                    else:
+                        p.is_alive = False
+                        p.death_reason = choice_data.get("reason", "Did not survive")
+                        p.survival_reason = None
+
+            current_round.status = "results"
+
+        return (True, {"status": "submitted", "all_chosen": all_chosen})
+
+    def verify(game: GameState):
+        current_round = game.rounds[game.current_round_idx]
+        return player_id in current_round.quickfire_player_choices
+
+    return await update_game_with_retry(code, mutator, verify, error_message="Failed to submit choice")
+
 
 @web_app.post("/api/submit_trap")
 async def api_submit_trap(request: Request):
@@ -3698,6 +4084,14 @@ async def api_next_round(request: Request):
         new_round.status = "sacrifice_volunteer"
         new_round.scenario_text = "SACRIFICE PROTOCOL: One must fall for others to survive. Who will volunteer as tribute?"
         new_round.submission_start_time = time.time()  # Start timer for volunteer phase
+    elif round_type == "quickfire":
+        new_round.status = "quickfire_choice"
+        new_round.submission_start_time = time.time()
+        # Generate quickfire scenario with choices synchronously
+        import asyncio
+        quickfire_data = asyncio.run(generate_quickfire_scenario_async())
+        new_round.scenario_text = quickfire_data.get("scenario", "Quick! Make your choice!")
+        new_round.quickfire_choices = quickfire_data.get("choices", [])
     else:
         # survival, cooperative, and last_stand start with strategy phase
         new_round.status = "strategy"
@@ -4568,6 +4962,10 @@ def run_sacrifice_judgement(game_code: str, expected_round_idx: int = -1):
     import json
     import asyncio
 
+    # Get thread ID early for Weave context
+    game_for_thread = get_game(game_code)
+    thread_id = game_for_thread.weave_thread_id if game_for_thread else None
+
     async def judge_sacrifice():
         game = get_game(game_code)
         if not game:
@@ -4682,9 +5080,12 @@ def run_sacrifice_judgement(game_code: str, expected_round_idx: int = -1):
 
         print(f"SACRIFICE JUDGEMENT: Complete!", flush=True)
 
-    asyncio.run(judge_sacrifice())
+    # Run with Weave thread context
+    with get_weave_thread_context(thread_id):
+        asyncio.run(judge_sacrifice())
 
 
+@weave_op("llm/judge_sacrifice")
 async def judge_sacrifice_llm_async(speech: str, martyr_name: str):
     """Judge how epic the martyr's death was."""
     import re
@@ -4735,6 +5136,10 @@ def run_last_stand_judgement(game_code: str, expected_round_idx: int = -1):
     """Run HARSH judgement for Last Stand round - only ~20-30% should survive."""
     import json
     import asyncio
+
+    # Get thread ID early for Weave context
+    game_for_thread = get_game(game_code)
+    thread_id = game_for_thread.weave_thread_id if game_for_thread else None
 
     async def judge_and_generate_harsh(pid: str, player_name: str, strategy: str, scenario: str, style_theme: str | None):
         """Judge with extra harshness for Last Stand."""
@@ -4826,9 +5231,12 @@ def run_last_stand_judgement(game_code: str, expected_round_idx: int = -1):
 
         print(f"LAST STAND JUDGEMENT: Complete!", flush=True)
 
-    asyncio.run(run_all_judgements())
+    # Run with Weave thread context
+    with get_weave_thread_context(thread_id):
+        asyncio.run(run_all_judgements())
 
 
+@weave_op("llm/judge_last_stand")
 async def judge_strategy_harsh_async(scenario: str, strategy: str):
     """HARSH version of judgement for Last Stand - EVIL SANTA edition."""
     import re
@@ -4947,6 +5355,7 @@ def run_revival_judgement(game_code: str, expected_round_idx: int = -1):
     asyncio.run(do_revival_judgement())
 
 
+@weave_op("llm/judge_revival")
 async def judge_strategy_revival_async(scenario: str, strategy: str, player_name: str):
     """Judge with slight leniency for revived player - EVIL SANTA edition."""
     import re

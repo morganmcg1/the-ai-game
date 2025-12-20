@@ -7,7 +7,7 @@
 
 game:
   # Timer for submission phases (in seconds)
-  submission_timeout_seconds: 60
+  submission_timeout_seconds: 90
 
   # Timer for sacrifice volunteer phase (in seconds)
   volunteer_timeout_seconds: 20
@@ -34,8 +34,8 @@ rounds:
     - survival
     - survival
     - ranked
-    - ranked
-    - cooperative
+    - quickfire
+    - quickfire
     - cooperative
     - cooperative
     - sacrifice
